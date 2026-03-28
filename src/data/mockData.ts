@@ -23,12 +23,69 @@ export const chartData = [
   { day: "Sun2", sales: 49200, waste: 3700 },
 ];
 
-export const suppliers = [
-  { id: 1, supplier: "Fresh Farms", item: "Tomatoes", qty: "20 kg", expected: "Tomorrow", status: "pending" as const },
-  { id: 2, supplier: "Dairy Co.", item: "Paneer", qty: "5 kg", expected: "Today", status: "sent" as const },
-  { id: 3, supplier: "Spice Hub", item: "Cardamom", qty: "500 g", expected: "3 days", status: "error" as const },
-  { id: 4, supplier: "Green Greens", item: "Spinach", qty: "8 kg", expected: "Tomorrow", status: "sent" as const },
-  { id: 5, supplier: "Coastal Catch", item: "Prawns", qty: "3 kg", expected: "Today", status: "pending" as const },
+export interface Supplier {
+  id: number;
+  supplier: string;
+  itemCategories: string[];
+  contactNumber: string;
+  qty: string;
+  expected: string;
+  status: "pending" | "sent" | "error";
+  location: string;
+  operatingDays: string;
+  operationalTime: string;
+  returnPolicy: string;
+  paymentTerms: string;
+  isCustom?: boolean;
+  isSelected?: boolean;
+}
+
+export const suppliers: Supplier[] = [
+  { id: 1, supplier: "Fresh Farms", itemCategories: ["Fruits and Vegetables"], contactNumber: "+91-9876543210", qty: "20 kg", expected: "Tomorrow", status: "pending", location: "Market Yard, Pune", operatingDays: "Mon-Sat", operationalTime: "6:00 AM - 4:00 PM", returnPolicy: "24h for perishables", paymentTerms: "Net 15" },
+  { id: 2, supplier: "Dairy Co.", itemCategories: ["Dairy"], contactNumber: "+91-9876543211", qty: "5 L", expected: "Today", status: "sent", location: "Hadapsar, Pune", operatingDays: "Daily", operationalTime: "4:00 AM - 8:00 PM", returnPolicy: "Immediate on delivery", paymentTerms: "Weekly" },
+  { id: 3, supplier: "Spice Hub", itemCategories: ["Masala, Salt and Sugar"], contactNumber: "+91-9876543212", qty: "500 g", expected: "3 days", status: "error", location: "Kothrud, Pune", operatingDays: "Mon-Fri", operationalTime: "10:00 AM - 6:00 PM", returnPolicy: "7 days for sealed packs", paymentTerms: "Net 30" },
+  { id: 4, supplier: "Poultry Pride", itemCategories: ["Chicken and Eggs"], contactNumber: "+91-9876543213", qty: "10 kg", expected: "Tomorrow", status: "sent", location: "Wakad, Pune", operatingDays: "Daily", operationalTime: "5:00 AM - 12:00 PM", returnPolicy: "No returns for fresh poultry", paymentTerms: "COD" },
+  { id: 5, supplier: "Sauce Masters", itemCategories: ["Sauces and Seasoning"], contactNumber: "+91-9876543214", qty: "5 L", expected: "Today", status: "pending", location: "Viman Nagar, Pune", operatingDays: "Mon-Sat", operationalTime: "9:00 AM - 7:00 PM", returnPolicy: "15 days for damage", paymentTerms: "Net 15" },
+  { id: 6, supplier: "PackPro", itemCategories: ["Packaging Material"], contactNumber: "+91-9876543215", qty: "1000 pcs", expected: "2 days", status: "sent", location: "Chakan MIDC", operatingDays: "Mon-Fri", operationalTime: "9:00 AM - 6:00 PM", returnPolicy: "30 days for bulk defects", paymentTerms: "Monthly" },
+  { id: 7, supplier: "Global Foods", itemCategories: ["Canned and Imported Items", "Sauces and Seasoning"], contactNumber: "+91-9876543216", qty: "10 tins", expected: "Next Week", status: "pending", location: "Mumbai Port Trust", operatingDays: "Mon-Sat", operationalTime: "10:00 AM - 8:00 PM", returnPolicy: "Imported items: 10 days", paymentTerms: "Advance 50%" },
+  { id: 8, supplier: "Pure Oils", itemCategories: ["Edible Oils"], contactNumber: "+91-9876543217", qty: "15 L", expected: "Tomorrow", status: "sent", location: "Sangli Road", operatingDays: "Mon-Sat", operationalTime: "8:00 AM - 5:00 PM", returnPolicy: "Seal broken: No return", paymentTerms: "Net 15" },
+  { id: 9, supplier: "Frosty Bites", itemCategories: ["Frozen and Instant Food", "Bakery and Chocolates"], contactNumber: "+91-9876543218", qty: "12 pkts", expected: "Today", status: "error", location: "Pimpri, Pune", operatingDays: "Daily", operationalTime: "8:00 AM - 10:00 PM", returnPolicy: "Defrosting: Claim in 2h", paymentTerms: "Weekly" },
+  { id: 10, supplier: "BakeHouse", itemCategories: ["Bakery and Chocolates"], contactNumber: "+91-9876543219", qty: "20 loaves", expected: "Tomorrow", status: "sent", location: "Camp, Pune", operatingDays: "Mon-Sat", operationalTime: "7:00 AM - 9:00 PM", returnPolicy: "Same day for freshness", paymentTerms: "Net 7" },
+  { id: 11, supplier: "Golden Mills", itemCategories: ["Flours"], contactNumber: "+91-9876543220", qty: "50 kg", expected: "3 days", status: "pending", location: "Marketyard, Gultekdi", operatingDays: "Mon-Sat", operationalTime: "8:00 AM - 6:00 PM", returnPolicy: "Moisture damage: 48h", paymentTerms: "Net 30" },
+  { id: 12, supplier: "Pulse Point", itemCategories: ["Pulses"], contactNumber: "+91-9876543221", qty: "30 kg", expected: "Tomorrow", status: "sent", location: "Latur Grain Market", operatingDays: "Mon-Fri", operationalTime: "9:00 AM - 5:00 PM", returnPolicy: "Sieved/Cleaned: 7 days", paymentTerms: "Monthly" },
+  { id: 13, supplier: "Mixer Magic", itemCategories: ["Beverages and Mixers"], contactNumber: "+91-9876543222", qty: "5 crates", expected: "Today", status: "pending", location: "Kharadi, Pune", operatingDays: "Daily", operationalTime: "10:00 AM - 10:00 PM", returnPolicy: "Breakage during transport", paymentTerms: "Weekly" },
+  { id: 14, supplier: "NutriNuts", itemCategories: ["Dry Fruits and Nuts"], contactNumber: "+91-9876543223", qty: "2 kg", expected: "Next Week", status: "sent", location: "Bhavani Peth", operatingDays: "Mon-Sat", operationalTime: "11:00 AM - 7:00 PM", returnPolicy: "Quality check at delivery", paymentTerms: "COD" },
+  { id: 15, supplier: "Rice King", itemCategories: ["Rice and Rice Products"], contactNumber: "+91-9876543224", qty: "100 kg", expected: "Tomorrow", status: "pending", location: "Gondia, MH", operatingDays: "Mon-Fri", operationalTime: "9:00 AM - 6:00 PM", returnPolicy: "Bulk return: 15 days", paymentTerms: "Net 45" },
+  { id: 16, supplier: "Meat Masters", itemCategories: ["Mutton, Duck and Lamb"], contactNumber: "+91-9876543225", qty: "15 kg", expected: "Today", status: "sent", location: "Deonar, Mumbai", operatingDays: "Daily", operationalTime: "4:00 AM - 12:00 PM", returnPolicy: "Cold chain break: Same day", paymentTerms: "Daily" },
+  { id: 17, supplier: "Coastal Catch", itemCategories: ["Fish, Prawns and Seafood"], contactNumber: "+91-9876543226", qty: "8 kg", expected: "Tomorrow", status: "error", location: "Sasoon Dock", operatingDays: "Daily", operationalTime: "3:00 AM - 10:00 AM", returnPolicy: "Immediate quality check", paymentTerms: "Daily" }
+];
+
+export interface InventoryItem {
+  id: number;
+  name: string;
+  category: string;
+  quantity: number;
+  unit: string;
+  status: "In Stock" | "Low Stock" | "Out of Stock";
+  minThreshold: number;
+}
+
+export const initialInventory: InventoryItem[] = [
+  { id: 1, name: "Tomatoes", category: "Fruits and Vegetables", quantity: 45, unit: "kg", status: "In Stock", minThreshold: 15 },
+  { id: 2, name: "Potatoes", category: "Fruits and Vegetables", quantity: 18, unit: "kg", status: "Low Stock", minThreshold: 20 },
+  { id: 3, name: "Onions", category: "Fruits and Vegetables", quantity: 60, unit: "kg", status: "In Stock", minThreshold: 25 },
+  { id: 4, name: "Milk (Full Cream)", category: "Dairy", quantity: 12, unit: "L", status: "Low Stock", minThreshold: 15 },
+  { id: 5, name: "Paneer", category: "Dairy", quantity: 0, unit: "kg", status: "Out of Stock", minThreshold: 5 },
+  { id: 6, name: "Salt", category: "Masala, Salt and Sugar", quantity: 10, unit: "kg", status: "In Stock", minThreshold: 2 },
+  { id: 7, name: "Eggs", category: "Chicken and Eggs", quantity: 240, unit: "pcs", status: "In Stock", minThreshold: 50 },
+  { id: 8, name: "Chicken Breast", category: "Chicken and Eggs", quantity: 4, unit: "kg", status: "Low Stock", minThreshold: 10 },
+  { id: 9, name: "Soy Sauce", category: "Sauces and Seasoning", quantity: 8, unit: "L", status: "In Stock", minThreshold: 3 },
+  { id: 10, name: "Takeaway Boxes", category: "Packaging Material", quantity: 150, unit: "pcs", status: "Low Stock", minThreshold: 200 },
+  { id: 11, name: "Canned Tomatoes", category: "Canned and Imported Items", quantity: 24, unit: "tins", status: "In Stock", minThreshold: 10 },
+  { id: 12, name: "Sunflower Oil", category: "Edible Oils", quantity: 45, unit: "L", status: "In Stock", minThreshold: 15 },
+  { id: 13, name: "Frozen Peas", category: "Frozen and Instant Food", quantity: 0, unit: "kg", status: "Out of Stock", minThreshold: 5 },
+  { id: 14, name: "Basmati Rice", category: "Rice and Rice Products", quantity: 85, unit: "kg", status: "In Stock", minThreshold: 25 },
+  { id: 15, name: "Wheat Flour", category: "Flours", quantity: 40, unit: "kg", status: "In Stock", minThreshold: 20 },
 ];
 
 export interface PrepItem {
