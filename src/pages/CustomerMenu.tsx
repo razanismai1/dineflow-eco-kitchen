@@ -1,0 +1,279 @@
+import { useState, useEffect } from "react";
+import { Leaf, Plus, Minus, ShoppingCart, Share2, X, ArrowRight } from "lucide-react";
+import { flashSales, menuCategories, type MenuItem } from "@/data/mockData";
+import { useApp } from "@/contexts/AppContext";
+import { toast } from "sonner";
+
+type Filter = "All" | "Veg" | "Non-Veg" | "Flash Deals" | "Under ₹200";
+const filters: Filter[] = ["All", "Veg", "Non-Veg", "Flash Deals", "Under ₹200"];
+
+const flashGradients = [
+  "from-accent/60 to-mint/40",
+  "from-amber/50 to-coral/30",
+  "from-steel/40 to-accent/30",
+];
+
+function CountdownTimer({ initialSeconds }: { initialSeconds: number }) {
+  const [secs, setSecs] = useState(initialSeconds);
+  useEffect(() => {
+    const id = setInterval(() => setSecs((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const mm = Math.floor(secs / 60).toString().padStart(2, "0");
+  const ss = (secs % 60).toString().padStart(2, "0");
+  const ending = secs < 600;
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={`font-mono text-sm font-medium ${ending ? "text-amber" : "text-muted-foreground"}`}>
+        ⏰ {mm}:{ss}
+      </span>
+      {ending && <span className="badge-pill bg-amber/15 text-amber text-[10px] animate-pulse-badge">⚡ Ending Soon</span>}
+    </div>
+  );
+}
+
+function EcoScore({ score }: { score: number }) {
+  return (
+    <span className="text-xs">
+      {Array.from({ length: 5 }, (_, i) => (
+        <span key={i} className={i < score ? "text-mint" : "text-muted-foreground/30"}>🌿</span>
+      ))}
+    </span>
+  );
+}
+
+export default function CustomerMenu() {
+  const { cart, addToCart, removeFromCart, updateCartQty, clearCart, ecoPoints, addEcoPoints } = useApp();
+  const [activeFilter, setActiveFilter] = useState<Filter>("All");
+  const [cartOpen, setCartOpen] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
+
+  const totalItems = cart.reduce((a, c) => a + c.quantity, 0);
+  const totalPrice = cart.reduce((a, c) => a + c.price * c.quantity, 0);
+
+  const flashSaleNames = flashSales.map((f) => f.name);
+
+  const filteredCategories = menuCategories.map((cat) => ({
+    ...cat,
+    items: cat.items.filter((item) => {
+      if (activeFilter === "Veg") return item.veg;
+      if (activeFilter === "Non-Veg") return !item.veg;
+      if (activeFilter === "Flash Deals") return flashSaleNames.includes(item.name);
+      if (activeFilter === "Under ₹200") return item.price < 200;
+      return true;
+    }),
+  })).filter((cat) => cat.items.length > 0);
+
+  const placeOrder = () => {
+    setCartOpen(false);
+    clearCart();
+    addEcoPoints(85);
+    setShowReceipt(true);
+  };
+
+  const handleShare = async () => {
+    const text = `🌿 DineFlow Impact: I saved 1.2 kg CO₂ and earned 85 Eco-Points today! #DineFlow #Sustainability`;
+    if (navigator.share) {
+      try { await navigator.share({ title: "My DineFlow Impact", text }); }
+      catch { /* cancelled */ }
+    } else {
+      await navigator.clipboard.writeText(text);
+      toast.success("Impact summary copied to clipboard!");
+    }
+  };
+
+  // Eco Receipt
+  if (showReceipt) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "#1A3A2A" }}>
+        <div className="max-w-md w-full mx-auto p-8 text-center space-y-6" style={{ color: "#F5F0E8" }}>
+          <p className="text-sm tracking-widest opacity-70">🌿 DineFlow</p>
+          <h1 className="font-display text-3xl leading-tight">YOUR IMPACT TODAY</h1>
+          <div className="w-16 h-px mx-auto" style={{ background: "#F5F0E840" }} />
+
+          <div className="space-y-6">
+            <div className="animate-count-up">
+              <p className="text-3xl">🌍</p>
+              <p className="font-display text-4xl mt-1">1.2 kg</p>
+              <p className="text-sm opacity-70 mt-1">CO₂ Saved</p>
+            </div>
+            <div className="animate-count-up" style={{ animationDelay: "0.2s" }}>
+              <p className="text-3xl">♻️</p>
+              <p className="font-display text-4xl mt-1">0%</p>
+              <p className="text-sm opacity-70 mt-1">Food Waste in your order</p>
+            </div>
+            <div className="animate-count-up" style={{ animationDelay: "0.4s" }}>
+              <p className="text-3xl">🌿</p>
+              <p className="font-display text-4xl mt-1">+85</p>
+              <p className="text-sm opacity-70 mt-1">Eco-Points earned</p>
+            </div>
+          </div>
+
+          <div className="w-16 h-px mx-auto" style={{ background: "#F5F0E840" }} />
+          <p className="text-sm opacity-70">Priya M. · The Green Table · {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
+          <p className="italic text-sm opacity-60">"You saved the equivalent of driving 8km less today."</p>
+          <div className="w-16 h-px mx-auto" style={{ background: "#F5F0E840" }} />
+
+          <div className="space-y-3 pt-2">
+            <button onClick={handleShare}
+              className="w-full py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2"
+              style={{ background: "#F5F0E820", color: "#F5F0E8" }}>
+              <Share2 size={16} /> Share Your Impact
+            </button>
+            <button onClick={() => setShowReceipt(false)}
+              className="w-full py-3 rounded-lg font-medium text-sm"
+              style={{ background: "#2D6A4F", color: "#F5F0E8" }}>
+              View Receipt
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background flex justify-center">
+      <div className="w-full max-w-[430px] relative pb-24">
+        {/* Sticky Header */}
+        <header className="sticky top-0 z-40 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
+          <div>
+            <h1 className="font-display text-lg flex items-center gap-1">🍃 DineFlow</h1>
+            <p className="text-xs text-muted-foreground">The Green Table</p>
+          </div>
+          <div className="flex items-center gap-1.5 text-accent">
+            <Leaf size={16} />
+            <span className="font-mono text-sm font-medium">{ecoPoints} pts</span>
+          </div>
+        </header>
+
+        {/* Flash Sale Carousel */}
+        <section className="px-4 pt-4">
+          <p className="text-sm font-medium mb-3">♻️ Zero-Waste Flash Deals — Limited Time!</p>
+          <div className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory scrollbar-hide">
+            {flashSales.map((fs, i) => (
+              <div key={fs.id} className="min-w-[200px] snap-start card-dineflow overflow-hidden shrink-0">
+                <div className={`h-28 bg-gradient-to-br ${flashGradients[i % flashGradients.length]} flex items-center justify-center`}>
+                  <span className="text-4xl">{["🧀", "🍮", "🍲"][i]}</span>
+                </div>
+                <div className="p-3 space-y-2">
+                  <p className="font-display text-base">{fs.name}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="line-through text-muted-foreground text-sm">₹{fs.originalPrice}</span>
+                    <span className="text-accent font-bold">₹{fs.salePrice}</span>
+                  </div>
+                  <CountdownTimer initialSeconds={fs.endsIn} />
+                  <p className="text-xs text-mint">🌿 Saves {fs.co2Saved} kg CO₂</p>
+                  <button className="btn-primary w-full text-xs py-1.5"
+                    onClick={() => addToCart({ id: fs.id + 100, name: fs.name, price: fs.salePrice })}>
+                    Add to Order
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Filter Bar */}
+        <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-hide">
+          {filters.map((f) => (
+            <button key={f} onClick={() => setActiveFilter(f)}
+              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                activeFilter === f ? "bg-accent text-accent-foreground border-accent" : "bg-card text-muted-foreground border-border hover:border-accent/50"
+              }`}>
+              {f}
+            </button>
+          ))}
+        </div>
+
+        {/* Menu Items */}
+        <section className="px-4 space-y-6 pb-4">
+          {filteredCategories.map((cat) => (
+            <div key={cat.name}>
+              <h3 className="font-display text-lg sticky top-[73px] bg-background py-2 z-30">{cat.name}</h3>
+              <div className="space-y-3">
+                {cat.items.map((item) => (
+                  <div key={item.id} className="card-dineflow p-3 flex gap-3">
+                    <div className="w-[60px] h-[60px] rounded-lg bg-muted flex items-center justify-center shrink-0 text-xl">
+                      {item.veg ? "🥬" : "🍗"}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between">
+                        <p className="font-medium text-sm">{item.name}</p>
+                        <span className={`w-3 h-3 rounded-full shrink-0 mt-0.5 ${item.veg ? "bg-mint" : "bg-coral"}`} />
+                      </div>
+                      <p className="text-xs text-muted-foreground line-clamp-1">{item.desc}</p>
+                      <EcoScore score={item.ecoScore} />
+                    </div>
+                    <div className="flex flex-col items-end justify-between">
+                      <span className="font-medium text-sm">₹{item.price}</span>
+                      <button className="w-7 h-7 rounded-lg bg-accent text-accent-foreground flex items-center justify-center"
+                        onClick={() => addToCart({ id: item.id, name: item.name, price: item.price })}>
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </section>
+
+        {/* Floating Cart */}
+        {totalItems > 0 && (
+          <button onClick={() => setCartOpen(true)}
+            className="fixed bottom-20 left-1/2 -translate-x-1/2 max-w-[400px] w-[calc(100%-2rem)] py-3 px-5 rounded-xl bg-accent text-accent-foreground font-medium text-sm flex items-center justify-between z-40 shadow-lg">
+            <span>🛒 {totalItems} item{totalItems > 1 ? "s" : ""} — ₹{totalPrice}</span>
+            <span className="flex items-center gap-1">View Order <ArrowRight size={14} /></span>
+          </button>
+        )}
+
+        {/* Cart Sheet */}
+        {cartOpen && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => setCartOpen(false)}>
+            <div className="bg-card w-full max-w-[430px] rounded-t-2xl p-5 space-y-4 max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()} style={{ animation: "slideUp 0.3s ease-out" }}>
+              <div className="w-12 h-1 bg-border rounded-full mx-auto" />
+              <div className="flex items-center justify-between">
+                <h3 className="font-display text-lg">Your Order</h3>
+                <button onClick={() => setCartOpen(false)}><X size={20} className="text-muted-foreground" /></button>
+              </div>
+
+              <div className="space-y-3">
+                {cart.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">{item.name}</p>
+                      <p className="text-xs text-muted-foreground">₹{item.price} each</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button className="w-7 h-7 rounded-lg border border-border flex items-center justify-center"
+                        onClick={() => updateCartQty(item.id, item.quantity - 1)}><Minus size={12} /></button>
+                      <span className="font-mono text-sm w-5 text-center">{item.quantity}</span>
+                      <button className="w-7 h-7 rounded-lg border border-border flex items-center justify-center"
+                        onClick={() => updateCartQty(item.id, item.quantity + 1)}><Plus size={12} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t border-border pt-3 flex items-center justify-between">
+                <span className="font-medium">Subtotal</span>
+                <span className="font-display text-lg">₹{totalPrice}</span>
+              </div>
+
+              <label className="flex items-center gap-3 py-2 cursor-pointer">
+                <input type="checkbox" className="w-4 h-4 accent-[#2D6A4F] rounded" />
+                <span className="text-sm">🌿 Sync with my arrival (Pre-order)</span>
+              </label>
+
+              <button className="btn-primary w-full py-3 text-base" onClick={placeOrder}>
+                Place Order
+              </button>
+            </div>
+            <style>{`@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
