@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Camera, ChevronDown } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Camera, ChevronDown, Plus, Minus } from "lucide-react";
 import { prepItems, flashSales } from "@/data/mockData";
 import { useApp } from "@/contexts/AppContext";
 import { toast } from "sonner";
@@ -22,16 +22,38 @@ const tagColors: Record<string, string> = {
 
 export default function KitchenPanel() {
   const { flashSaleActive, toggleFlashSale, wasteLogs, addWasteLog } = useApp();
+  const [localPrepItems, setLocalPrepItems] = useState(prepItems);
   const [logItem, setLogItem] = useState(prepItems[0].name);
   const [logQty, setLogQty] = useState("");
   const [logUnit, setLogUnit] = useState("g");
   const [logReason, setLogReason] = useState("Over-prepped");
   const [scanning, setScanning] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleScan = () => {
+  const handleScanClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
     setScanning(true);
-    toast.info("Scanning... (demo mode)");
-    setTimeout(() => setScanning(false), 1200);
+    toast.info(`Analyzing image: ${file.name}...`);
+    
+    setTimeout(() => {
+      setScanning(false);
+      // Simulate scanning by auto-filling fields with a random item
+      const randomItem = localPrepItems[Math.floor(Math.random() * localPrepItems.length)];
+      setLogItem(randomItem.name);
+      setLogQty("500");
+      setLogUnit("g");
+      setLogReason("Expired");
+      toast.success(`Identified: ${randomItem.name}`);
+    }, 1500);
+    
+    // Reset file input so identical files trigger onChange again if needed
+    e.target.value = '';
   };
 
   const handleLogWaste = () => {
@@ -45,7 +67,19 @@ export default function KitchenPanel() {
       reason: logReason,
     });
     setLogQty("");
-    toast.success("Waste logged");
+    toast.success("Waste logged successfully");
+  };
+
+  const handleUpdatePrep = (id: number, increment: number) => {
+    setLocalPrepItems((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          const newPrepped = Math.max(0, item.prepped + increment);
+          return { ...item, prepped: newPrepped };
+        }
+        return item;
+      })
+    );
   };
 
   return (
@@ -64,7 +98,7 @@ export default function KitchenPanel() {
             <h2 className="font-display text-xl">Today's Prep Sheet</h2>
             <span className="badge-pill bg-mint/20 text-mint text-xs">92% AI Accuracy</span>
           </div>
-          {prepItems.map((item) => {
+          {localPrepItems.map((item) => {
             const pct = Math.round((item.prepped / item.target) * 100);
             return (
               <div key={item.id} className="bg-gray-900/60 rounded-xl p-4 space-y-3">
@@ -77,17 +111,34 @@ export default function KitchenPanel() {
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-3 text-sm text-gray-400">
-                  <span>Target: {item.target}</span>
-                  <span>Usual: {item.usual}</span>
-                  <span>Prepped: {item.prepped}</span>
+                <div className="flex items-center justify-between text-sm text-gray-400">
+                  <div className="flex gap-4">
+                    <span>Target: <strong className="text-gray-200">{item.target}</strong></span>
+                    <span>Usual: {item.usual}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span>Prepped:</span>
+                    <button 
+                      onClick={() => handleUpdatePrep(item.id, -1)}
+                      className="p-1 bg-gray-800 rounded hover:bg-gray-700 transition"
+                    >
+                      <Minus size={14} />
+                    </button>
+                    <strong className="text-gray-200 min-w-[2ch] text-center">{item.prepped}</strong>
+                    <button 
+                      onClick={() => handleUpdatePrep(item.id, 1)}
+                      className="p-1 bg-gray-800 rounded hover:bg-gray-700 transition"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
                 </div>
                 <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                   <div className={`h-full rounded-full transition-all duration-700 ${pct >= 90 ? "bg-mint" : pct >= 50 ? "bg-accent" : "bg-amber"}`}
-                    style={{ width: `${pct}%` }} />
+                    style={{ width: `${Math.min(pct, 100)}%` }} />
                 </div>
                 {item.expiryAlert && (
-                  <div className="flex items-center justify-between bg-coral/10 rounded-lg px-3 py-2">
+                  <div className="flex items-center justify-between bg-coral/10 rounded-lg px-3 py-2 mt-2">
                     <span className="text-sm text-coral">⚠️ Stock: {item.stock} — expiring soon</span>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <span className="text-xs text-gray-400">Add to Flash Sale?</span>
@@ -108,10 +159,18 @@ export default function KitchenPanel() {
         {/* RIGHT — Waste Logger */}
         <div className="w-[40%] space-y-4">
           {/* Scan Button */}
-          <button onClick={handleScan}
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileChange} 
+            accept="image/*" 
+            className="hidden" 
+          />
+          <button onClick={handleScanClick}
+            disabled={scanning}
             className={`w-full py-6 rounded-xl bg-coral text-white font-medium text-lg flex items-center justify-center gap-3 transition-transform ${scanning ? "scale-95 opacity-80" : "hover:scale-[1.02]"}`}>
-            <Camera size={24} />
-            SCAN WASTE ITEM
+            <Camera size={24} className={scanning ? "animate-pulse" : ""} />
+            {scanning ? "ANALYZING IMAGE..." : "CAMERA SCAN / UPLOAD"}
           </button>
 
           {/* Manual Log */}
@@ -120,7 +179,7 @@ export default function KitchenPanel() {
             <div className="relative">
               <select value={logItem} onChange={(e) => setLogItem(e.target.value)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm appearance-none pr-8">
-                {prepItems.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+                {localPrepItems.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
               </select>
               <ChevronDown size={14} className="absolute right-3 top-3 text-gray-500 pointer-events-none" />
             </div>
@@ -139,7 +198,9 @@ export default function KitchenPanel() {
               </select>
               <ChevronDown size={14} className="absolute right-3 top-3 text-gray-500 pointer-events-none" />
             </div>
-            <button onClick={handleLogWaste} className="btn-primary w-full">Log Waste</button>
+            <button onClick={handleLogWaste} className="w-full py-2 bg-mint text-gray-900 rounded-lg font-medium hover:bg-mint/90 transition">
+              Log Waste
+            </button>
           </div>
 
           {/* Flash Sale Panel */}
@@ -167,11 +228,15 @@ export default function KitchenPanel() {
           {/* Recent Waste Log */}
           <div className="bg-gray-900/60 rounded-xl p-4 space-y-2">
             <h3 className="font-medium text-sm text-gray-400">Recent Waste Log</h3>
-            {wasteLogs.slice(0, 5).map((log, i) => (
-              <p key={i} className="text-xs text-gray-400">
-                <span className="font-mono text-gray-500">{log.timestamp}</span> — {log.item}, {log.qty}{log.unit}, {log.reason}
-              </p>
-            ))}
+            {wasteLogs.length === 0 ? (
+              <p className="text-xs text-gray-500">No waste logged today.</p>
+            ) : (
+              wasteLogs.slice(0, 5).map((log, i) => (
+                <p key={i} className="text-xs text-gray-400">
+                  <span className="font-mono text-gray-500">{log.timestamp}</span> — {log.item}, {log.qty}{log.unit}, {log.reason}
+                </p>
+              ))
+            )}
           </div>
         </div>
       </div>
