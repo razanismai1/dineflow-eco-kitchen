@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider } from "@/contexts/AppContext";
 import NavigationPill from "@/components/NavigationPill";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import AdminDashboard from "./pages/AdminDashboard";
 import KitchenPanel from "./pages/KitchenPanel";
@@ -21,10 +22,10 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/kitchen" element={<KitchenPanel />} />
-            <Route path="/floor" element={<FloorMap />} />
-            <Route path="/menu" element={<CustomerMenu />} />
+            <Route path="/admin" element={<ProtectedRoute allowedRoles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
+            <Route path="/kitchen" element={<ProtectedRoute allowedRoles={["admin", "chef"]}><KitchenPanel /></ProtectedRoute>} />
+            <Route path="/floor" element={<ProtectedRoute allowedRoles={["admin", "waiter"]}><FloorMap /></ProtectedRoute>} />
+            <Route path="/menu" element={<ProtectedRoute allowedRoles={["admin", "customer"]}><CustomerMenu /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <NavigationPill />

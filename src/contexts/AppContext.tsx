@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import { tables as initialTables, TableData } from "@/data/mockData";
 
+export type UserRole = "admin" | "chef" | "waiter" | "customer" | null;
+
+
 export interface CartItem {
   id: number;
   name: string;
@@ -31,6 +34,8 @@ interface AppContextType {
   toggleFlashSale: (id: number) => void;
   wasteLogs: WasteLogEntry[];
   addWasteLog: (entry: WasteLogEntry) => void;
+  userRole: UserRole;
+  setUserRole: React.Dispatch<React.SetStateAction<UserRole>>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -47,6 +52,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [tablesState, setTablesState] = useState<TableData[]>(initialTables);
   const [flashSaleActive, setFlashSaleActive] = useState<Record<number, boolean>>({ 2: true });
   const [wasteLogs, setWasteLogs] = useState<WasteLogEntry[]>(initialWasteLogs);
+  const [userRole, setUserRole] = useState<UserRole>(null);
 
   const addToCart = (item: { id: number; name: string; price: number }) => {
     setCart((prev) => {
@@ -77,7 +83,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider
-      value={{ cart, addToCart, removeFromCart, updateCartQty, clearCart, ecoPoints, addEcoPoints, tablesState, setTablesState, resetAllTables, flashSaleActive, toggleFlashSale, wasteLogs, addWasteLog }}
+      value={{ cart, addToCart, removeFromCart, updateCartQty, clearCart, ecoPoints, addEcoPoints, tablesState, setTablesState, resetAllTables, flashSaleActive, toggleFlashSale, wasteLogs, addWasteLog, userRole, setUserRole }}
     >
       {children}
     </AppContext.Provider>
