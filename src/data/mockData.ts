@@ -67,25 +67,25 @@ export interface InventoryItem {
   quantity: number;
   unit: string;
   status: "In Stock" | "Low Stock" | "Out of Stock";
-  minThreshold: number;
+  dailyRequirement: number;
 }
 
 export const initialInventory: InventoryItem[] = [
-  { id: 1, name: "Tomatoes", category: "Fruits and Vegetables", quantity: 45, unit: "kg", status: "In Stock", minThreshold: 15 },
-  { id: 2, name: "Potatoes", category: "Fruits and Vegetables", quantity: 18, unit: "kg", status: "Low Stock", minThreshold: 20 },
-  { id: 3, name: "Onions", category: "Fruits and Vegetables", quantity: 60, unit: "kg", status: "In Stock", minThreshold: 25 },
-  { id: 4, name: "Milk (Full Cream)", category: "Dairy", quantity: 12, unit: "L", status: "Low Stock", minThreshold: 15 },
-  { id: 5, name: "Paneer", category: "Dairy", quantity: 0, unit: "kg", status: "Out of Stock", minThreshold: 5 },
-  { id: 6, name: "Salt", category: "Masala, Salt and Sugar", quantity: 10, unit: "kg", status: "In Stock", minThreshold: 2 },
-  { id: 7, name: "Eggs", category: "Chicken and Eggs", quantity: 240, unit: "pcs", status: "In Stock", minThreshold: 50 },
-  { id: 8, name: "Chicken Breast", category: "Chicken and Eggs", quantity: 4, unit: "kg", status: "Low Stock", minThreshold: 10 },
-  { id: 9, name: "Soy Sauce", category: "Sauces and Seasoning", quantity: 8, unit: "L", status: "In Stock", minThreshold: 3 },
-  { id: 10, name: "Takeaway Boxes", category: "Packaging Material", quantity: 150, unit: "pcs", status: "Low Stock", minThreshold: 200 },
-  { id: 11, name: "Canned Tomatoes", category: "Canned and Imported Items", quantity: 24, unit: "tins", status: "In Stock", minThreshold: 10 },
-  { id: 12, name: "Sunflower Oil", category: "Edible Oils", quantity: 45, unit: "L", status: "In Stock", minThreshold: 15 },
-  { id: 13, name: "Frozen Peas", category: "Frozen and Instant Food", quantity: 0, unit: "kg", status: "Out of Stock", minThreshold: 5 },
-  { id: 14, name: "Basmati Rice", category: "Rice and Rice Products", quantity: 85, unit: "kg", status: "In Stock", minThreshold: 25 },
-  { id: 15, name: "Wheat Flour", category: "Flours", quantity: 40, unit: "kg", status: "In Stock", minThreshold: 20 },
+  { id: 1, name: "Tomatoes", category: "Fruits and Vegetables", quantity: 45, unit: "kg", status: "In Stock", dailyRequirement: 15 },
+  { id: 2, name: "Potatoes", category: "Fruits and Vegetables", quantity: 18, unit: "kg", status: "Low Stock", dailyRequirement: 20 },
+  { id: 3, name: "Onions", category: "Fruits and Vegetables", quantity: 60, unit: "kg", status: "In Stock", dailyRequirement: 25 },
+  { id: 4, name: "Milk (Full Cream)", category: "Dairy", quantity: 12, unit: "L", status: "Low Stock", dailyRequirement: 15 },
+  { id: 5, name: "Paneer", category: "Dairy", quantity: 0, unit: "kg", status: "Out of Stock", dailyRequirement: 5 },
+  { id: 6, name: "Salt", category: "Masala, Salt and Sugar", quantity: 10, unit: "kg", status: "In Stock", dailyRequirement: 2 },
+  { id: 7, name: "Eggs", category: "Chicken and Eggs", quantity: 240, unit: "pcs", status: "In Stock", dailyRequirement: 50 },
+  { id: 8, name: "Chicken Breast", category: "Chicken and Eggs", quantity: 4, unit: "kg", status: "Low Stock", dailyRequirement: 10 },
+  { id: 9, name: "Soy Sauce", category: "Sauces and Seasoning", quantity: 8, unit: "L", status: "In Stock", dailyRequirement: 3 },
+  { id: 10, name: "Takeaway Boxes", category: "Packaging Material", quantity: 150, unit: "pcs", status: "Low Stock", dailyRequirement: 200 },
+  { id: 11, name: "Canned Tomatoes", category: "Canned and Imported Items", quantity: 24, unit: "tins", status: "In Stock", dailyRequirement: 10 },
+  { id: 12, name: "Sunflower Oil", category: "Edible Oils", quantity: 45, unit: "L", status: "In Stock", dailyRequirement: 15 },
+  { id: 13, name: "Frozen Peas", category: "Frozen and Instant Food", quantity: 0, unit: "kg", status: "Out of Stock", dailyRequirement: 5 },
+  { id: 14, name: "Basmati Rice", category: "Rice and Rice Products", quantity: 85, unit: "kg", status: "In Stock", dailyRequirement: 25 },
+  { id: 15, name: "Wheat Flour", category: "Flours", quantity: 40, unit: "kg", status: "In Stock", dailyRequirement: 20 },
 ];
 
 export interface PrepItem {

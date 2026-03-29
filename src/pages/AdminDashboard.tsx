@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Map, ChefHat, Package, Recycle, BarChart3, Settings,
-  TrendingUp, Leaf, LogOut, User, Truck, Plus, Check, X, ChevronRight, ChevronDown, Save, AlertTriangle, AlertCircle
+  TrendingUp, Leaf, LogOut, User, Truck, Plus, Check, X, ChevronRight, ChevronDown, Save, AlertTriangle, AlertCircle, Edit2
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -91,6 +91,72 @@ export default function AdminDashboard() {
 
   // Inventory State
   const [inventoryList, setInventoryList] = useState(initialInventory);
+  
+  // Inventory Setup Modal State
+  const [isInventoryModalOpen, setIsInventoryModalOpen] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  const [itemName, setItemName] = useState("");
+  const [itemCategory, setItemCategory] = useState(CATEGORIES[0]);
+  const [itemQty, setItemQty] = useState<number | string>("");
+  const [itemUnit, setItemUnit] = useState("kg");
+  const [itemDailyReq, setItemDailyReq] = useState<number | string>("");
+
+  const openInventoryModal = (item?: typeof initialInventory[0]) => {
+    if (item) {
+      setEditingItemId(item.id);
+      setItemName(item.name);
+      setItemCategory(item.category);
+      setItemQty(item.quantity);
+      setItemUnit(item.unit);
+      setItemDailyReq(item.dailyRequirement);
+    } else {
+      setEditingItemId(null);
+      setItemName("");
+      setItemCategory(CATEGORIES[0]);
+      setItemQty("");
+      setItemUnit("kg");
+      setItemDailyReq("");
+    }
+    setIsInventoryModalOpen(true);
+  };
+
+  const handleSaveInventoryItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    const qty = Number(itemQty) || 0;
+    const dailyReq = Number(itemDailyReq) || 0;
+    
+    let status: "In Stock" | "Low Stock" | "Out of Stock" = "In Stock";
+    if (qty <= 0) status = "Out of Stock";
+    else if (qty <= dailyReq) status = "Low Stock";
+
+    if (editingItemId) {
+      setInventoryList(prev => prev.map(item => 
+        item.id === editingItemId ? {
+          ...item,
+          name: itemName,
+          category: itemCategory,
+          quantity: qty,
+          unit: itemUnit,
+          dailyRequirement: dailyReq,
+          status
+        } : item
+      ));
+      toast.success("Inventory item updated");
+    } else {
+      const newItem = {
+        id: Math.max(...inventoryList.map(i => i.id), 0) + 1,
+        name: itemName,
+        category: itemCategory,
+        quantity: qty,
+        unit: itemUnit,
+        dailyRequirement: dailyReq,
+        status
+      };
+      setInventoryList([...inventoryList, newItem]);
+      toast.success("Inventory item added");
+    }
+    setIsInventoryModalOpen(false);
+  };
 
   // Settings State
   const [restaurantName, setRestaurantName] = useState("The Green Table");
@@ -375,7 +441,7 @@ export default function AdminDashboard() {
             <p className="text-sm text-muted-foreground">Track stock levels and set automated alerts</p>
           </div>
           <button 
-            onClick={() => toast.success("Opening Add Item Form (Demo)")}
+            onClick={() => openInventoryModal()}
             className="btn-primary flex items-center gap-2">
             <Plus size={16} /> Add Item
           </button>
@@ -412,7 +478,9 @@ export default function AdminDashboard() {
                 <th className="px-6 py-4 font-medium">Item Name</th>
                 <th className="px-6 py-4 font-medium">Category</th>
                 <th className="px-6 py-4 font-medium">Quantity</th>
+                <th className="px-6 py-4 font-medium">Daily Req</th>
                 <th className="px-6 py-4 font-medium">Status</th>
+                <th className="px-6 py-4 font-medium w-20">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -423,12 +491,24 @@ export default function AdminDashboard() {
                   <td className="px-6 py-4">
                     <span className="font-mono">{item.quantity}</span> <span className="text-muted-foreground text-xs">{item.unit}</span>
                   </td>
+                  <td className="px-6 py-4 text-muted-foreground font-mono">
+                    {item.dailyRequirement} {item.unit} / day
+                  </td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider
                       ${item.status === 'In Stock' ? 'bg-mint/15 text-mint' : 
                         item.status === 'Low Stock' ? 'bg-amber/15 text-amber' : 'bg-coral/15 text-coral'}`}>
                       {item.status}
                     </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <button 
+                      onClick={() => openInventoryModal(item)}
+                      className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                      title="Edit / Setup Item"
+                    >
+                      <Edit2 size={16} />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -598,6 +678,76 @@ export default function AdminDashboard() {
           )}
         </div>
       </main>
+
+      {/* Inventory Setup Modal */}
+      {isInventoryModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-card w-full max-w-md rounded-xl border border-border shadow-lg p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-display text-xl">{editingItemId ? "Setup Inventory Item" : "Add Inventory Item"}</h2>
+              <button 
+                onClick={() => setIsInventoryModalOpen(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSaveInventoryItem} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Item Name <span className="text-coral">*</span></label>
+                <input required type="text" value={itemName} onChange={e => setItemName(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all" 
+                  placeholder="e.g. Tomatoes" />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Category <span className="text-coral">*</span></label>
+                <select value={itemCategory} onChange={e => setItemCategory(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all">
+                  {CATEGORIES.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Current Quantity <span className="text-coral">*</span></label>
+                  <input required type="number" min="0" step="any" value={itemQty} onChange={e => setItemQty(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all" 
+                    placeholder="e.g. 50" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Unit <span className="text-coral">*</span></label>
+                  <input required type="text" value={itemUnit} onChange={e => setItemUnit(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all" 
+                    placeholder="e.g. kg, L, pcs" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Daily Requirement <span className="text-coral">*</span></label>
+                <input required type="number" min="0" step="any" value={itemDailyReq} onChange={e => setItemDailyReq(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all" 
+                  placeholder="e.g. 15" />
+                <p className="text-xs text-muted-foreground mt-1.5">How much is needed for a restaurant in a day. This determines stock status.</p>
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={() => setIsInventoryModalOpen(false)}
+                  className="flex-1 px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors">
+                  Cancel
+                </button>
+                <button type="submit"
+                  className="flex-1 btn-primary py-2 text-sm">
+                  Save Item
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Add Vendor Modal */}
       {isAddVendorModalOpen && (
