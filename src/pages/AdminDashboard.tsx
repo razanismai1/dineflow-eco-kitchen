@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   LayoutDashboard, Map, ChefHat, Package, Recycle, BarChart3, Settings,
-  TrendingUp, Leaf, LogOut, User, Truck, Plus, Check, X, ChevronRight, ChevronDown, Save, AlertTriangle, AlertCircle, Edit2, ShoppingCart
+  TrendingUp, Leaf, Truck, Plus, Check, X, ChevronRight, ChevronDown, Save, AlertTriangle, AlertCircle, Edit2, ShoppingCart
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -17,17 +17,6 @@ const CATEGORIES = [
   "Edible Oils", "Frozen and Instant Food", "Bakery and Chocolates", "Flours",
   "Pulses", "Beverages and Mixers", "Dry Fruits and Nuts", "Rice and Rice Products",
   "Mutton, Duck and Lamb", "Fish, Prawns and Seafood"
-];
-
-const sidebarItems = [
-  { label: "Dashboard", icon: LayoutDashboard, view: "dashboard" },
-  { label: "Suppliers", icon: Truck, view: "suppliers" },
-  { label: "Floor Map", icon: Map, to: "/floor" },
-  { label: "Kitchen", icon: ChefHat, to: "/kitchen" },
-  { label: "Inventory", icon: Package, view: "inventory" },
-  { label: "Waste Log", icon: Recycle, view: "waste" },
-  { label: "Analytics", icon: BarChart3, view: "analytics" },
-  { label: "Settings", icon: Settings, view: "settings" },
 ];
 
 const insights = [
@@ -89,7 +78,8 @@ export default function AdminDashboard() {
   const revenue = useCountUp(statsData.revenueRecovered);
   const co2 = useCountUp(statsData.co2Saved);
   const efficiency = useCountUp(statsData.inventoryEfficiency);
-  const [currentView, setCurrentView] = useState("dashboard");
+  const [searchParams] = useSearchParams();
+  const currentView = searchParams.get("view") ?? "dashboard";
   const { setUserRole } = useApp();
   const [suppliersList, setSuppliersList] = useState(initialSuppliers);
   const [expandedSupplierId, setExpandedSupplierId] = useState<number | null>(null);
@@ -266,7 +256,7 @@ export default function AdminDashboard() {
 
   const handleLogout = () => {
     setUserRole(null);
-  }
+  };
 
   const toggleExpand = (id: number) => {
     setExpandedSupplierId(expandedSupplierId === id ? null : id);
@@ -327,15 +317,19 @@ export default function AdminDashboard() {
 
   const renderDashboard = () => (
     <div className="space-y-8 animate-in fade-in duration-300">
-      {/* Header */}
-      <div>
-        <h1 className="font-display text-2xl">Strategy Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Saturday, 28 March 2026 · The Green Table</p>
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Admin › Dashboard</p>
+          <h1 className="font-display text-2xl">Strategy Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Saturday, 28 March 2026 · The Green Table</p>
+        </div>
+        <span className="badge-pill bg-accent/10 text-accent border border-accent/20">🛡 Admin</span>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid with left border stripes */}
       <div className="grid grid-cols-3 gap-6">
-        <div className="card-dineflow p-6 animate-count-up">
+        <div className="card-dineflow-stripe stat-stripe-green p-6 animate-count-up">
           <div className="flex items-start justify-between mb-3">
             <div>
               <p className="text-sm text-muted-foreground">Revenue Recovered</p>
@@ -348,7 +342,7 @@ export default function AdminDashboard() {
           <span className="badge-pill bg-mint/15 text-mint">+18% vs last month</span>
         </div>
 
-        <div className="card-dineflow p-6 animate-count-up" style={{ animationDelay: "0.1s" }}>
+        <div className="card-dineflow-stripe stat-stripe-mint p-6 animate-count-up" style={{ animationDelay: "0.1s" }}>
           <div className="flex items-start justify-between mb-3">
             <div>
               <p className="text-sm text-muted-foreground">CO₂ Saved</p>
@@ -361,7 +355,7 @@ export default function AdminDashboard() {
           <span className="badge-pill bg-mint/15 text-mint">= {statsData.treesEquivalent} trees planted</span>
         </div>
 
-        <div className="card-dineflow p-6 animate-count-up" style={{ animationDelay: "0.2s" }}>
+        <div className="card-dineflow-stripe stat-stripe-steel p-6 animate-count-up" style={{ animationDelay: "0.2s" }}>
           <div className="flex items-start justify-between mb-3">
             <div>
               <p className="text-sm text-muted-foreground">Inventory Efficiency</p>
@@ -394,14 +388,16 @@ export default function AdminDashboard() {
 
         <div className="col-span-2 card-dineflow p-6">
           <h2 className="font-display text-lg mb-4">🔮 AI Insights</h2>
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {insights.map((ins, i) => (
-              <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
-                <span className="text-lg">{ins.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm leading-snug">{ins.text}</p>
+              <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-muted/40 border border-border/60">
+                <div className="w-8 h-8 rounded-lg bg-card flex items-center justify-center shrink-0 border border-border/60 shadow-sm">
+                  <span className="text-base leading-none">{ins.icon}</span>
                 </div>
-                <button className="btn-primary text-xs px-2 py-1 shrink-0"
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs leading-snug text-foreground/90">{ins.text}</p>
+                </div>
+                <button className="btn-primary text-[10px] px-2 py-1 shrink-0"
                   onClick={() => toast.success("Action triggered (demo)")}>
                   {ins.action}
                 </button>
@@ -796,64 +792,18 @@ export default function AdminDashboard() {
   );
 
   return (
-    <div className="flex min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="w-60 bg-card border-r border-border flex flex-col fixed h-screen z-10">
-        <div className="p-6 flex items-center gap-2">
-          <Leaf className="text-accent" size={24} />
-          <span className="font-display text-xl">DineFlow</span>
-        </div>
-        <nav className="flex-1 px-3 space-y-1">
-          {sidebarItems.map((item) => {
-            if (item.to) {
-              return (
-                <Link key={item.label} to={item.to}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-muted-foreground hover:bg-muted hover:text-foreground">
-                  <item.icon size={18} />
-                  {item.label}
-                </Link>
-              );
-            }
-            return (
-              <button key={item.label} onClick={() => setCurrentView(item.view as string)}
-                className={`flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  currentView === item.view ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}>
-                <item.icon size={18} />
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
-        <div className="p-4 border-t border-border">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-accent/20 flex items-center justify-center border border-accent/20">
-              <User size={16} className="text-accent" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">Admin</p>
-              <button onClick={handleLogout} className="text-xs text-muted-foreground flex items-center gap-1 hover:text-destructive transition-colors">
-                <LogOut size={12} /> Logout
-              </button>
-            </div>
+    <div className="min-h-screen bg-background p-8 pb-16">
+      <div className="max-w-6xl mx-auto">
+        {currentView === "dashboard" && renderDashboard()}
+        {currentView === "suppliers" && renderSuppliers()}
+        {currentView === "settings" && renderSettings()}
+        {currentView === "inventory" && renderInventory()}
+        {currentView !== "dashboard" && currentView !== "suppliers" && currentView !== "settings" && currentView !== "inventory" && (
+          <div className="flex items-center justify-center h-64 text-muted-foreground">
+            Module under construction
           </div>
-        </div>
-      </aside>
-
-      {/* Main */}
-      <main className="flex-1 ml-60 p-8 pb-24 min-h-screen overflow-y-auto w-full">
-        <div className="max-w-6xl mx-auto">
-          {currentView === "dashboard" && renderDashboard()}
-          {currentView === "suppliers" && renderSuppliers()}
-          {currentView === "settings" && renderSettings()}
-          {currentView === "inventory" && renderInventory()}
-          {currentView !== "dashboard" && currentView !== "suppliers" && currentView !== "settings" && currentView !== "inventory" && (
-            <div className="flex items-center justify-center h-64 text-muted-foreground">
-              Module under construction
-            </div>
-          )}
-        </div>
-      </main>
+        )}
+      </div>
 
       {/* Inventory Setup Modal */}
       {isInventoryModalOpen && (
