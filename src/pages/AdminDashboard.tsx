@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Map, ChefHat, Package, Recycle, BarChart3, Settings,
-  TrendingUp, Leaf, LogOut, User, Truck, Plus, Check, X, ChevronRight, ChevronDown, Save, AlertTriangle, AlertCircle, Edit2
+  TrendingUp, Leaf, LogOut, User, Truck, Plus, Check, X, ChevronRight, ChevronDown, Save, AlertTriangle, AlertCircle, Edit2, ShoppingCart
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -74,6 +74,17 @@ const statusColors: Record<string, string> = {
   error: "bg-coral/15 text-coral",
 };
 
+interface PurchaseOrder {
+  id: string;
+  itemId: number;
+  itemName: string;
+  quantity: number;
+  unit: string;
+  supplierName: string;
+  status: "pending" | "approved" | "completed";
+  date: string;
+}
+
 export default function AdminDashboard() {
   const revenue = useCountUp(statsData.revenueRecovered);
   const co2 = useCountUp(statsData.co2Saved);
@@ -94,12 +105,98 @@ export default function AdminDashboard() {
   
   // Inventory Setup Modal State
   const [isInventoryModalOpen, setIsInventoryModalOpen] = useState(false);
+  // inventory item form
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [itemName, setItemName] = useState("");
   const [itemCategory, setItemCategory] = useState(CATEGORIES[0]);
   const [itemQty, setItemQty] = useState<number | string>("");
   const [itemUnit, setItemUnit] = useState("kg");
   const [itemDailyReq, setItemDailyReq] = useState<number | string>("");
+
+  // Purchase Order State
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
+
+  const handleUpdateOrderStatus = (orderId: string, newStatus: "approved" | "completed") => {
+    setPurchaseOrders(prev => prev.map(order => {
+      if (order.id === orderId) {
+        if (newStatus === "completed" && order.status !== "completed") {
+          setInventoryList(invList => invList.map(item => {
+            if (item.id === order.itemId) {
+              const newQty = item.quantity + order.quantity;
+              let status: "In Stock" | "Low Stock" | "Out of Stock" = "In Stock";
+              if (newQty <= 0) status = "Out of Stock";
+              else if (newQty <= item.dailyRequirement) status = "Low Stock";
+              return { ...item, quantity: newQty, status };
+            }
+            return item;
+          }));
+          toast.success(`${order.itemName} stock updated by ${order.quantity} ${order.unit}`);
+        } else {
+           toast.success(`Order ${orderId} marked as ${newStatus}`);
+        }
+        return { ...order, status: newStatus };
+      }
+      return order;
+    }));
+  };
+  const [purchaseItem, setPurchaseItem] = useState<typeof initialInventory[0] | null>(null);
+  const [purchaseQty, setPurchaseQty] = useState<number | string>("");
+  const [selectedSupplierId, setSelectedSupplierId] = useState<number | "">("");
+
+  const [fetchedSuppliers, setFetchedSuppliers] = useState<typeof suppliersList>([]);
+
+  useEffect(() => {
+    // TODO: Connect this to Django backend in the future
+    // fetch('/api/suppliers').then(res => res.json()).then(data => setFetchedSuppliers(data));
+    
+    // For local simulation, only use suppliers that have been saved by the user
+    // This explicitly removes the full mock supplier list as requested,
+    // but we add exactly one mock supplier to satisfy the new request.
+    const userAddedSuppliers = suppliersList.filter(s => s.isCustom);
+    const oneMockSupplier = suppliersList.find(s => s.id === 1); // Fresh Farms
+    
+    if (oneMockSupplier) {
+      setFetchedSuppliers([oneMockSupplier, ...userAddedSuppliers]);
+    } else {
+      setFetchedSuppliers(userAddedSuppliers);
+    }
+  }, [suppliersList]);
+
+  const openPurchaseModal = (item: typeof initialInventory[0]) => {
+    setPurchaseItem(item);
+    setPurchaseQty("");
+    // Find a supplier that supplies this category from fetched backend list
+    const matchingSupplier = fetchedSuppliers.find(s => s.itemCategories.includes(item.category));
+    setSelectedSupplierId(matchingSupplier ? matchingSupplier.id : "");
+    setIsPurchaseModalOpen(true);
+  };
+
+  const handlePurchaseOrder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!purchaseItem) return;
+    const qty = Number(purchaseQty) || 0;
+    
+    const supplierName = fetchedSuppliers.find(s => s.id === Number(selectedSupplierId))?.supplier || "Custom Supplier";
+
+    const newOrder: PurchaseOrder = {
+      id: `PO-${Math.floor(1000 + Math.random() * 9000)}`,
+      itemId: purchaseItem.id,
+      itemName: purchaseItem.name,
+      quantity: qty,
+      unit: purchaseItem.unit,
+      supplierName,
+      status: "pending",
+      date: new Date().toLocaleDateString("en-GB")
+    };
+    
+    setPurchaseOrders(prev => [newOrder, ...prev]);
+
+    toast.success(`Purchase order for ${qty} ${purchaseItem.unit} of ${purchaseItem.name} generated`);
+    setIsPurchaseModalOpen(false);
+    setPurchaseItem(null);
+  };
+  // Extra duplicate lines removed
 
   const openInventoryModal = (item?: typeof initialInventory[0]) => {
     if (item) {
@@ -428,6 +525,66 @@ export default function AdminDashboard() {
     );
   };
 
+  const renderOrdersTable = (list: PurchaseOrder[], title: string, statusConfig: { showAction: boolean }) => (
+    <div className="mb-6">
+      <h3 className="font-display text-lg mb-3">{title}</h3>
+      <div className="card-dineflow overflow-hidden">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr className="border-b border-border text-left text-muted-foreground bg-muted/20">
+              <th className="px-6 py-4 font-medium">Order ID / Date</th>
+              <th className="px-6 py-4 font-medium">Item & Qty</th>
+              <th className="px-6 py-4 font-medium">Supplier</th>
+              <th className="px-6 py-4 font-medium">Status</th>
+              {statusConfig.showAction && <th className="px-6 py-4 font-medium">Action</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((order) => (
+              <tr key={order.id} className="border-b border-border hover:bg-muted/10 transition-colors">
+                <td className="px-6 py-4 font-medium">
+                  <span>{order.id}</span>
+                  <p className="text-xs text-muted-foreground font-normal">{order.date}</p>
+                </td>
+                <td className="px-6 py-4">
+                  <span>{order.itemName}</span>
+                  <p className="text-xs text-muted-foreground font-mono">{order.quantity} {order.unit}</p>
+                </td>
+                <td className="px-6 py-4 text-muted-foreground">{order.supplierName}</td>
+                <td className="px-6 py-4">
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider
+                    ${order.status === 'completed' ? 'bg-mint/15 text-mint' : 
+                      order.status === 'approved' ? 'bg-accent/15 text-accent' : 'bg-amber/15 text-amber'}`}>
+                    {order.status}
+                  </span>
+                </td>
+                {statusConfig.showAction && (
+                  <td className="px-6 py-4 flex items-center gap-2">
+                    {order.status === "approved" && (
+                      <button onClick={() => handleUpdateOrderStatus(order.id, 'completed')} className="text-xs bg-mint text-white hover:bg-mint/90 transition-colors rounded !py-1 !px-2 font-medium">
+                        Complete
+                      </button>
+                    )}
+                    {order.status === "completed" && (
+                      <span className="text-xs text-muted-foreground"><Check size={14} className="inline mr-1 text-mint"/>Done</span>
+                    )}
+                  </td>
+                )}
+              </tr>
+            ))}
+            {list.length === 0 && (
+              <tr>
+                <td colSpan={statusConfig.showAction ? 5 : 4} className="px-6 py-8 text-center text-muted-foreground text-xs">
+                  No {title.toLowerCase()} found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
   const renderInventory = () => {
     const totalItems = inventoryList.length;
     const lowStockItems = inventoryList.filter(item => item.status === "Low Stock").length;
@@ -501,7 +658,16 @@ export default function AdminDashboard() {
                       {item.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 flex items-center gap-2">
+                    {item.status !== "In Stock" && (
+                      <button 
+                        onClick={() => openPurchaseModal(item)}
+                        className="p-1.5 text-accent hover:text-accent-foreground hover:bg-accent/20 rounded-md transition-colors"
+                        title="Create Purchase Order"
+                      >
+                        <ShoppingCart size={16} />
+                      </button>
+                    )}
                     <button 
                       onClick={() => openInventoryModal(item)}
                       className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
@@ -521,6 +687,16 @@ export default function AdminDashboard() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Purchase Orders Tracker */}
+        <div className="mt-8 pt-4 border-t border-border">
+          <h2 className="font-display text-xl mb-4">Purchase Orders History</h2>
+          
+          {renderOrdersTable(purchaseOrders.filter(o => o.status === "pending"), "Pending Orders", { showAction: false })}
+          {renderOrdersTable(purchaseOrders.filter(o => o.status === "approved"), "Approved Orders", { showAction: true })}
+          {renderOrdersTable(purchaseOrders.filter(o => o.status === "completed"), "Completed Orders", { showAction: false })}
+          
         </div>
       </div>
     );
@@ -742,6 +918,74 @@ export default function AdminDashboard() {
                 <button type="submit"
                   className="flex-1 btn-primary py-2 text-sm">
                   Save Item
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Purchase Order Modal */}
+      {isPurchaseModalOpen && purchaseItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-card w-full max-w-md rounded-xl border border-border shadow-lg p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-display text-xl">Create Purchase Order</h2>
+              <button 
+                onClick={() => setIsPurchaseModalOpen(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <form onSubmit={handlePurchaseOrder} className="space-y-4">
+              <div className="mb-4">
+                <p className="text-sm font-medium mb-1">Item Details</p>
+                <div className="p-3 bg-muted/30 rounded-lg border border-border">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-medium">{purchaseItem.name}</span>
+                    <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${
+                      purchaseItem.status === 'Low Stock' ? 'bg-amber/15 text-amber' : 'bg-coral/15 text-coral'
+                    }`}>{purchaseItem.status}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Current Stock: {purchaseItem.quantity} {purchaseItem.unit}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Order Quantity (<span className="text-accent">{purchaseItem.unit}</span>) <span className="text-coral">*</span></label>
+                <input required type="number" min="0.1" step="any" value={purchaseQty} onChange={e => setPurchaseQty(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all" 
+                  placeholder={`e.g. ${purchaseItem.dailyRequirement * 3}`} />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Select Supplier <span className="text-coral">*</span></label>
+                <select required value={selectedSupplierId} onChange={e => setSelectedSupplierId(e.target.value ? Number(e.target.value) : "")}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all">
+                  <option value="" disabled>Select a supplier...</option>
+                  {fetchedSuppliers.filter(s => s.itemCategories.includes(purchaseItem.category)).map(c => (
+                    <option key={c.id} value={c.id}>{c.supplier}</option>
+                  ))}
+                  {fetchedSuppliers.length > 0 && <option disabled>──────</option>}
+                  {fetchedSuppliers.filter(s => !s.itemCategories.includes(purchaseItem.category)).map(c => (
+                    <option key={c.id} value={c.id}>{c.supplier} (Other Categories)</option>
+                  ))}
+                  {fetchedSuppliers.length === 0 && (
+                    <option disabled>No suppliers found. Please add vendors in the Suppliers section.</option>
+                  )}
+                </select>
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={() => setIsPurchaseModalOpen(false)}
+                  className="flex-1 px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors">
+                  Cancel
+                </button>
+                <button type="submit"
+                  className="flex-1 btn-primary py-2 text-sm flex items-center justify-center gap-2">
+                  <ShoppingCart size={16} /> Place Order
                 </button>
               </div>
             </form>
