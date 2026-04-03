@@ -33,10 +33,11 @@ function CountdownTimer({ initialSeconds }: { initialSeconds: number }) {
 }
 
 function EcoScore({ score }: { score: number }) {
+  const color = score >= 4 ? "text-mint" : score >= 3 ? "text-amber" : "text-muted-foreground";
   return (
-    <span className="text-xs">
+    <span className={`text-xs font-medium ${color}`}>
       {Array.from({ length: 5 }, (_, i) => (
-        <span key={i} className={i < score ? "text-mint" : "text-muted-foreground/30"}>🌿</span>
+        <span key={i} className={i < score ? color : "text-muted-foreground/20"}>🌿</span>
       ))}
     </span>
   );
@@ -218,19 +219,28 @@ export default function CustomerMenu() {
           ))}
         </section>
 
-        {/* Floating Cart */}
+        {/* Floating Cart — gradient primary with shadow */}
         {totalItems > 0 && (
           <button onClick={() => setCartOpen(true)}
-            className="fixed bottom-20 left-1/2 -translate-x-1/2 max-w-[400px] w-[calc(100%-2rem)] py-3 px-5 rounded-xl bg-accent text-accent-foreground font-medium text-sm flex items-center justify-between z-40 shadow-lg">
-            <span>🛒 {totalItems} item{totalItems > 1 ? "s" : ""} — ₹{totalPrice}</span>
+            className="fixed bottom-20 left-1/2 -translate-x-1/2 max-w-[400px] w-[calc(100%-2rem)] py-3 px-5 rounded-xl font-medium text-sm flex items-center justify-between z-40"
+            style={{
+              background: "linear-gradient(135deg, hsl(var(--accent)) 0%, hsl(var(--mint)) 100%)",
+              color: "hsl(var(--accent-foreground))",
+              boxShadow: "0 8px 24px -4px hsl(var(--accent) / 0.45)",
+            }}
+          >
+            <span className="flex items-center gap-2">
+              <ShoppingCart size={16} />
+              {totalItems} item{totalItems > 1 ? "s" : ""} — ₹{totalPrice}
+            </span>
             <span className="flex items-center gap-1">View Order <ArrowRight size={14} /></span>
           </button>
         )}
 
         {/* Cart Sheet */}
         {cartOpen && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => setCartOpen(false)}>
-            <div className="bg-card w-full max-w-[430px] rounded-t-2xl p-5 space-y-4 max-h-[80vh] overflow-y-auto"
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-[2px]" onClick={() => setCartOpen(false)}>
+            <div className="frosted-glass w-full max-w-[430px] rounded-t-2xl p-5 space-y-4 max-h-[80vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()} style={{ animation: "slideUp 0.3s ease-out" }}>
               <div className="w-12 h-1 bg-border rounded-full mx-auto" />
               <div className="flex items-center justify-between">
