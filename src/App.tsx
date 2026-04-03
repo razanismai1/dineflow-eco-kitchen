@@ -12,6 +12,7 @@ import KitchenPanel from "./pages/KitchenPanel";
 import FloorMap from "./pages/FloorMap";
 import CustomerMenu from "./pages/CustomerMenu";
 import WasteManagement from "./pages/WasteManagement";
+import TableQRCodes from "./pages/TableQRCodes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,7 +30,8 @@ function AppRoutes() {
         <Route path="/kitchen" element={<ProtectedRoute allowedRoles={["admin", "chef"]}><KitchenPanel /></ProtectedRoute>} />
         <Route path="/waste" element={<ProtectedRoute allowedRoles={["admin", "chef"]}><WasteManagement /></ProtectedRoute>} />
         <Route path="/floor" element={<ProtectedRoute allowedRoles={["admin", "waiter"]}><FloorMap /></ProtectedRoute>} />
-        <Route path="/menu" element={<ProtectedRoute allowedRoles={["admin", "customer"]}><CustomerMenu /></ProtectedRoute>} />
+        <Route path="/menu" element={<CustomerMenu />} />
+        <Route path="/qr" element={<ProtectedRoute allowedRoles={["admin"]}><TableQRCodes /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </AppLayout>

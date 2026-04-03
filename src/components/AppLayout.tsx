@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Map, ChefHat, Package, Recycle, BarChart3,
-  Settings, Truck, Leaf, LogOut, User, PanelLeftClose, PanelLeftOpen
+  Settings, Truck, Leaf, LogOut, User, PanelLeftClose, PanelLeftOpen, QrCode
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 
@@ -14,6 +14,7 @@ const adminNavItems = [
   { label: "Inventory",  icon: Package,        to: "/admin?view=inventory" },
   { label: "Waste Log",  icon: Recycle,        to: "/waste" },
   { label: "Analytics",  icon: BarChart3,      to: "/admin?view=analytics" },
+  { label: "QR Codes",   icon: QrCode,         to: "/qr" },
   { label: "Settings",   icon: Settings,       to: "/admin?view=settings" },
 ];
 

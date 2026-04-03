@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { Leaf, Plus, Minus, ShoppingCart, Share2, X, ArrowRight } from "lucide-react";
+import { Leaf, Plus, Minus, ShoppingCart, Share2, X, ArrowRight, QrCode } from "lucide-react";
 import { flashSales, menuCategories, type MenuItem } from "@/data/mockData";
 import { useApp } from "@/contexts/AppContext";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router-dom";
 
 type Filter = "All" | "Veg" | "Non-Veg" | "Flash Deals" | "Under ₹200";
 const filters: Filter[] = ["All", "Veg", "Non-Veg", "Flash Deals", "Under ₹200"];
@@ -44,7 +45,9 @@ function EcoScore({ score }: { score: number }) {
 }
 
 export default function CustomerMenu() {
-  const { cart, addToCart, removeFromCart, updateCartQty, clearCart, ecoPoints, addEcoPoints } = useApp();
+  const { cart, addToCart, removeFromCart, updateCartQty, clearCart, ecoPoints, addEcoPoints, setTablesState } = useApp();
+  const [searchParams] = useSearchParams();
+  const tableId = searchParams.get("table"); // e.g. "T-01" from QR scan
   const [activeFilter, setActiveFilter] = useState<Filter>("All");
   const [cartOpen, setCartOpen] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -69,6 +72,17 @@ export default function CustomerMenu() {
     setCartOpen(false);
     clearCart();
     addEcoPoints(85);
+    // If arrived via QR code, mark that table as occupied
+    if (tableId) {
+      setTablesState((prev) =>
+        prev.map((t) =>
+          t.id === tableId
+            ? { ...t, status: "occupied" as const, timeSeated: 0, course: 1 }
+            : t
+        )
+      );
+      toast.success(`Order placed for ${tableId}!`);
+    }
     setShowReceipt(true);
   };
 
@@ -111,7 +125,7 @@ export default function CustomerMenu() {
           </div>
 
           <div className="w-16 h-px mx-auto" style={{ background: "#F5F0E840" }} />
-          <p className="text-sm opacity-70">Priya M. · The Green Table · {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
+          <p className="text-sm opacity-70">The Green Table{tableId ? ` · ${tableId}` : ""} · {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
           <p className="italic text-sm opacity-60">"You saved the equivalent of driving 8km less today."</p>
           <div className="w-16 h-px mx-auto" style={{ background: "#F5F0E840" }} />
 
@@ -141,9 +155,17 @@ export default function CustomerMenu() {
             <h1 className="font-display text-lg flex items-center gap-1">🍃 DineFlow</h1>
             <p className="text-xs text-muted-foreground">The Green Table</p>
           </div>
-          <div className="flex items-center gap-1.5 text-accent">
-            <Leaf size={16} />
-            <span className="font-mono text-sm font-medium">{ecoPoints} pts</span>
+          <div className="flex items-center gap-2">
+            {tableId && (
+              <div className="flex items-center gap-1 bg-accent/10 text-accent text-xs font-semibold px-2.5 py-1 rounded-full border border-accent/20">
+                <QrCode size={11} />
+                {tableId}
+              </div>
+            )}
+            <div className="flex items-center gap-1.5 text-accent">
+              <Leaf size={16} />
+              <span className="font-mono text-sm font-medium">{ecoPoints} pts</span>
+            </div>
           </div>
         </header>
 
