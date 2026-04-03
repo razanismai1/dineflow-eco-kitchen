@@ -223,3 +223,19 @@ export const notifications: Notification[] = [
   { id: 3, type: "ready", color: "#74C69D", title: "TABLE READY", message: "T-05 cleaned and available", action: "Confirm" },
   { id: 4, type: "complaint", color: "#E76F51", title: "ISSUE FLAGGED", message: "T-04 — Guest complaint logged", action: "View Details" },
 ];
+
+export interface OrderItem {
+  id: string;
+  orderId: string;
+  name: string;
+  status: "new" | "preparing" | "done";
+  createdAt: number;
+}
+
+export const initialOrderItems: OrderItem[] = [
+  { id: '1', orderId: '#101', name: 'Mushroom Burger', status: 'new', createdAt: Date.now() - 60000 },
+  { id: '2', orderId: '#101', name: 'Truffle Fries', status: 'preparing', createdAt: Date.now() - 50000 },
+  { id: '3', orderId: '#102', name: 'Vegan Bowl', status: 'new', createdAt: Date.now() - 30000 },
+  { id: '4', orderId: '#103', name: 'Avo Toast', status: 'new', createdAt: Date.now() - 20000 },
+  { id: '5', orderId: '#104', name: 'Iced Matcha', status: 'new', createdAt: Date.now() - 10000 },
+];

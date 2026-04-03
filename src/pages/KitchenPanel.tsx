@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Camera, ChevronDown, Plus, Minus } from "lucide-react";
-import { prepItems, flashSales } from "@/data/mockData";
+import { prepItems, flashSales, initialOrderItems, OrderItem } from "@/data/mockData";
 import { useApp } from "@/contexts/AppContext";
 import { toast } from "sonner";
 
@@ -19,42 +19,20 @@ const tagColors: Record<string, string> = {
   weather: "bg-steel/20 text-blue-400",
   peak: "bg-mint/20 text-mint",
 };
-
 export default function KitchenPanel() {
   const { flashSaleActive, toggleFlashSale, wasteLogs, addWasteLog } = useApp();
+  const [orderItems, setOrderItems] = useState<OrderItem[]>(initialOrderItems);
+  const handleUpdateItemStatus = (id: string, newStatus: OrderItem['status']) => {
+    setOrderItems(prev => prev.map(item => item.id === id ? { ...item, status: newStatus } : item));
+  };
+
+  const activeItems = orderItems.filter(item => item.status !== 'done').sort((a, b) => a.createdAt - b.createdAt);
+
   const [localPrepItems, setLocalPrepItems] = useState(prepItems);
   const [logItem, setLogItem] = useState(prepItems[0].name);
   const [logQty, setLogQty] = useState("");
   const [logUnit, setLogUnit] = useState("g");
   const [logReason, setLogReason] = useState("Over-prepped");
-  const [scanning, setScanning] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleScanClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    setScanning(true);
-    toast.info(`Analyzing image: ${file.name}...`);
-    
-    setTimeout(() => {
-      setScanning(false);
-      // Simulate scanning by auto-filling fields with a random item
-      const randomItem = localPrepItems[Math.floor(Math.random() * localPrepItems.length)];
-      setLogItem(randomItem.name);
-      setLogQty("500");
-      setLogUnit("g");
-      setLogReason("Expired");
-      toast.success(`Identified: ${randomItem.name}`);
-    }, 1500);
-    
-    // Reset file input so identical files trigger onChange again if needed
-    e.target.value = '';
-  };
 
   const handleLogWaste = () => {
     if (!logQty) { toast.error("Enter quantity"); return; }
@@ -94,6 +72,54 @@ export default function KitchenPanel() {
       <div className="flex gap-6 p-6">
         {/* LEFT — Prep List */}
         <div className="w-[60%] space-y-4">
+          
+          {/* Order items queue */}
+          <div className="space-y-4 mb-10">
+            <h2 className="font-display text-xl">Live Orders (Item View)</h2>
+            <div className="flex flex-col gap-3">
+              {activeItems.length === 0 ? (
+                <div className="text-gray-500 text-sm italic bg-gray-900/40 p-4 rounded-xl text-center">No pending items.</div>
+              ) : (
+                activeItems.map(item => (
+                  <div key={item.id} className={`flex items-center justify-between p-4 rounded-xl border-l-[4px] bg-gray-900/60 transition-all ${item.status === 'preparing' ? 'border-accent' : 'border-gray-600'}`}>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-mono text-xs text-gray-400">{item.orderId}</span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(item.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                        </span>
+                        {item.status === 'preparing' && (
+                          <span className="badge-pill bg-accent/20 text-accent text-[10px] py-0.5 px-2">Preparing</span>
+                        )}
+                        {item.status === 'new' && (
+                          <span className="badge-pill bg-gray-700 text-gray-300 text-[10px] py-0.5 px-2">New</span>
+                        )}
+                      </div>
+                      <div className="font-medium text-lg text-gray-100">{item.name}</div>
+                    </div>
+                    <div>
+                      {item.status === 'new' ? (
+                        <button 
+                          onClick={() => handleUpdateItemStatus(item.id, 'preparing')}
+                          className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition"
+                        >
+                          Prepare
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => handleUpdateItemStatus(item.id, 'done')}
+                          className="px-4 py-2 bg-accent/20 hover:bg-accent/30 text-accent rounded-lg text-sm font-medium transition"
+                        >
+                          Mark as Done
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
           <div className="flex items-center justify-between mb-2">
             <h2 className="font-display text-xl">Today's Prep Sheet</h2>
             <span className="badge-pill bg-mint/20 text-mint text-xs">92% AI Accuracy</span>
@@ -158,21 +184,6 @@ export default function KitchenPanel() {
 
         {/* RIGHT — Waste Logger */}
         <div className="w-[40%] space-y-4">
-          {/* Scan Button */}
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleFileChange} 
-            accept="image/*" 
-            className="hidden" 
-          />
-          <button onClick={handleScanClick}
-            disabled={scanning}
-            className={`w-full py-6 rounded-xl bg-coral text-white font-medium text-lg flex items-center justify-center gap-3 transition-transform ${scanning ? "scale-95 opacity-80" : "hover:scale-[1.02]"}`}>
-            <Camera size={24} className={scanning ? "animate-pulse" : ""} />
-            {scanning ? "ANALYZING IMAGE..." : "CAMERA SCAN / UPLOAD"}
-          </button>
-
           {/* Manual Log */}
           <div className="bg-gray-900/60 rounded-xl p-4 space-y-3">
             <h3 className="font-medium text-sm text-gray-400">Manual Log</h3>
