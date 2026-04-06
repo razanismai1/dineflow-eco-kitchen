@@ -5,6 +5,7 @@ import {
   Settings, Truck, Leaf, LogOut, User, PanelLeftClose, PanelLeftOpen, QrCode
 } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
+import { clearSession } from "@/api/auth";
 
 const adminNavItems = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/admin" },
@@ -135,8 +136,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const handleLogout = () => {
+    clearSession();
+    localStorage.removeItem("user_role");
     setUserRole(null);
-    navigate("/");
+    navigate("/login", { replace: true });
   };
 
   // Landing and auth pages — no chrome

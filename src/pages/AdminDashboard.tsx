@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   LayoutDashboard, Map, ChefHat, Package, Recycle, BarChart3, Settings,
   TrendingUp, Leaf, Truck, Plus, Check, X, ChevronRight, ChevronDown, Save, AlertTriangle, AlertCircle, Edit2, ShoppingCart
@@ -7,9 +8,14 @@ import {
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import { statsData, chartData, suppliers as initialSuppliers, initialInventory } from "@/data/mockData";
 import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
+import { useDashboardAnalytics, useSalesVsWasteChart } from "@/hooks/useAnalytics";
+import { useSuppliers, useInventoryItems } from "@/hooks/useInventory";
+import { useCategories } from "@/hooks/useMenu";
+import { floorApi } from "@/api/floor";
+import { menuApi } from "@/api/menu";
+import { inventoryApi } from "@/api/inventory";
 
 const CATEGORIES = [
   "Fruits and Vegetables", "Dairy", "Masala, Salt and Sugar", "Chicken and Eggs",
@@ -74,14 +80,98 @@ interface PurchaseOrder {
   date: string;
 }
 
+interface SupplierUi {
+  id: number;
+  supplier: string;
+  itemCategories: string[];
+  contactNumber: string;
+  qty: string;
+  expected: string;
+  status: "pending" | "sent" | "error";
+  location: string;
+  operatingDays: string;
+  operationalTime: string;
+  returnPolicy: string;
+  paymentTerms: string;
+  isCustom?: boolean;
+  isSelected?: boolean;
+}
+
+interface InventoryUi {
+  id: number;
+  name: string;
+  category: string;
+  quantity: number;
+  unit: string;
+  status: "In Stock" | "Low Stock" | "Out of Stock";
+  dailyRequirement: number;
+}
+
+const toSupplierUi = (supplier: any): SupplierUi => {
+  const name = supplier?.supplier || supplier?.name || "Unknown Supplier";
+  const reliability = Number(supplier?.reliability_score ?? 100);
+  let status: SupplierUi["status"] = "pending";
+  if (reliability >= 90) status = "sent";
+  else if (reliability < 60) status = "error";
+
+  return {
+    id: Number(supplier?.id ?? Date.now()),
+    supplier: name,
+    itemCategories: Array.isArray(supplier?.itemCategories) && supplier.itemCategories.length > 0
+      ? supplier.itemCategories
+      : ["General"],
+    contactNumber: supplier?.contactNumber || "N/A",
+    qty: supplier?.qty || "-",
+    expected: supplier?.expected || "-",
+    status,
+    location: supplier?.location || "N/A",
+    operatingDays: supplier?.operatingDays || "N/A",
+    operationalTime: supplier?.operationalTime || "N/A",
+    returnPolicy: supplier?.returnPolicy || "N/A",
+    paymentTerms: supplier?.paymentTerms || "N/A",
+    isCustom: !!supplier?.isCustom,
+    isSelected: !!supplier?.isSelected,
+  };
+};
+
+const toInventoryUi = (item: any): InventoryUi => {
+  const quantity = Number(item?.quantity ?? 0);
+  const dailyRequirement = Number(item?.dailyRequirement ?? 10);
+  let status: InventoryUi["status"] = "In Stock";
+  if (quantity <= 0) status = "Out of Stock";
+  else if (quantity <= dailyRequirement) status = "Low Stock";
+
+  return {
+    id: Number(item?.id ?? Date.now()),
+    name: item?.name || "Unknown Item",
+    category: item?.category || item?.supplier_name || "General",
+    quantity,
+    unit: item?.unit || "units",
+    dailyRequirement,
+    status,
+  };
+};
+
 export default function AdminDashboard() {
+  const queryClient = useQueryClient();
+  const { data: analyticsData } = useDashboardAnalytics();
+  const { data: chartDataApi } = useSalesVsWasteChart();
+  const { data: suppliersApi } = useSuppliers();
+  const { data: inventoryApi } = useInventoryItems();
+  const { data: menuCategoriesApi = [] } = useCategories();
+
+  const statsData = analyticsData || { revenueRecovered: 0, co2Saved: 0, inventoryEfficiency: 0, treesEquivalent: 0 };
+  const chartData = chartDataApi || [];
+  const initialSuppliers: SupplierUi[] = Array.isArray(suppliersApi) ? suppliersApi.map(toSupplierUi) : [];
+  const initialInventory: InventoryUi[] = Array.isArray(inventoryApi) ? inventoryApi.map(toInventoryUi) : [];
+
   const revenue = useCountUp(statsData.revenueRecovered);
   const co2 = useCountUp(statsData.co2Saved);
   const efficiency = useCountUp(statsData.inventoryEfficiency);
   const [searchParams] = useSearchParams();
   const currentView = searchParams.get("view") ?? "dashboard";
   const { setUserRole } = useApp();
-  const [suppliersList, setSuppliersList] = useState(initialSuppliers);
+  const [suppliersList, setSuppliersList] = useState<SupplierUi[]>(initialSuppliers);
   const [expandedSupplierId, setExpandedSupplierId] = useState<number | null>(null);
 
   // Add Vendor Modal State
@@ -90,9 +180,43 @@ export default function AdminDashboard() {
   const [vendorCategories, setVendorCategories] = useState<string[]>([]);
   const [vendorPhone, setVendorPhone] = useState("");
 
+  // Global object creation modals
+  const [isAddTableModalOpen, setIsAddTableModalOpen] = useState(false);
+  const [tableName, setTableName] = useState("");
+  const [tableCapacity, setTableCapacity] = useState<number | string>(4);
+  const [tableStatus, setTableStatus] = useState("available");
+
+  const [isAddDishModalOpen, setIsAddDishModalOpen] = useState(false);
+  const [dishName, setDishName] = useState("");
+  const [dishDescription, setDishDescription] = useState("");
+  const [dishCategoryId, setDishCategoryId] = useState<number | "">("");
+  const [dishPrice, setDishPrice] = useState<number | string>("");
+  const [dishEcoScore, setDishEcoScore] = useState<number | string>(5);
+  const [dishIsVegan, setDishIsVegan] = useState(false);
+  const [dishNewCategory, setDishNewCategory] = useState("");
+
+  const [isAddPrepModalOpen, setIsAddPrepModalOpen] = useState(false);
+  const [prepName, setPrepName] = useState("");
+  const [prepQuantity, setPrepQuantity] = useState<number | string>("");
+  const [prepUnit, setPrepUnit] = useState("kg");
+  const [prepExpiryDate, setPrepExpiryDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().slice(0, 10);
+  });
+
   // Inventory State
-  const [inventoryList, setInventoryList] = useState(initialInventory);
+  const [inventoryList, setInventoryList] = useState<InventoryUi[]>(initialInventory);
   
+  // Sync when API data loads
+  useEffect(() => {
+    setSuppliersList(initialSuppliers);
+  }, [suppliersApi]);
+
+  useEffect(() => {
+    setInventoryList(initialInventory);
+  }, [inventoryApi]);
+
   // Inventory Setup Modal State
   const [isInventoryModalOpen, setIsInventoryModalOpen] = useState(false);
   // inventory item form
@@ -130,34 +254,21 @@ export default function AdminDashboard() {
       return order;
     }));
   };
-  const [purchaseItem, setPurchaseItem] = useState<typeof initialInventory[0] | null>(null);
+  const [purchaseItem, setPurchaseItem] = useState<InventoryUi | null>(null);
   const [purchaseQty, setPurchaseQty] = useState<number | string>("");
   const [selectedSupplierId, setSelectedSupplierId] = useState<number | "">("");
 
-  const [fetchedSuppliers, setFetchedSuppliers] = useState<typeof suppliersList>([]);
+  const [fetchedSuppliers, setFetchedSuppliers] = useState<SupplierUi[]>([]);
 
   useEffect(() => {
-    // TODO: Connect this to Django backend in the future
-    // fetch('/api/suppliers').then(res => res.json()).then(data => setFetchedSuppliers(data));
-    
-    // For local simulation, only use suppliers that have been saved by the user
-    // This explicitly removes the full mock supplier list as requested,
-    // but we add exactly one mock supplier to satisfy the new request.
-    const userAddedSuppliers = suppliersList.filter(s => s.isCustom);
-    const oneMockSupplier = suppliersList.find(s => s.id === 1); // Fresh Farms
-    
-    if (oneMockSupplier) {
-      setFetchedSuppliers([oneMockSupplier, ...userAddedSuppliers]);
-    } else {
-      setFetchedSuppliers(userAddedSuppliers);
-    }
+    setFetchedSuppliers(suppliersList);
   }, [suppliersList]);
 
-  const openPurchaseModal = (item: typeof initialInventory[0]) => {
+  const openPurchaseModal = (item: InventoryUi) => {
     setPurchaseItem(item);
     setPurchaseQty("");
     // Find a supplier that supplies this category from fetched backend list
-    const matchingSupplier = fetchedSuppliers.find(s => s.itemCategories.includes(item.category));
+    const matchingSupplier = fetchedSuppliers.find(s => (s.itemCategories || []).includes(item.category));
     setSelectedSupplierId(matchingSupplier ? matchingSupplier.id : "");
     setIsPurchaseModalOpen(true);
   };
@@ -188,7 +299,7 @@ export default function AdminDashboard() {
   };
   // Extra duplicate lines removed
 
-  const openInventoryModal = (item?: typeof initialInventory[0]) => {
+  const openInventoryModal = (item?: InventoryUi) => {
     if (item) {
       setEditingItemId(item.id);
       setItemName(item.name);
@@ -315,6 +426,87 @@ export default function AdminDashboard() {
     toast.success("Vendor added successfully");
   };
 
+  const handleAddTable = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await floorApi.createTable({
+        name: tableName.trim(),
+        capacity: Number(tableCapacity),
+        status: tableStatus,
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ["floor", "tables"] });
+      toast.success("Table created successfully");
+      setIsAddTableModalOpen(false);
+      setTableName("");
+      setTableCapacity(4);
+      setTableStatus("available");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to create table");
+    }
+  };
+
+  const handleAddDish = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      let categoryId = Number(dishCategoryId);
+
+      if (dishNewCategory.trim()) {
+        const createdCategory = await menuApi.createCategory({ name: dishNewCategory.trim() });
+        categoryId = createdCategory.id;
+      }
+
+      if (!categoryId) {
+        toast.error("Please select or create a category");
+        return;
+      }
+
+      await menuApi.createItem({
+        name: dishName.trim(),
+        description: dishDescription.trim(),
+        category: categoryId,
+        base_price: Number(dishPrice),
+        eco_score: Number(dishEcoScore) || 5,
+        is_vegan: dishIsVegan,
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ["menu", "categories"] });
+      await queryClient.invalidateQueries({ queryKey: ["menu", "items"] });
+      toast.success("Dish created successfully");
+      setIsAddDishModalOpen(false);
+      setDishName("");
+      setDishDescription("");
+      setDishCategoryId("");
+      setDishPrice("");
+      setDishEcoScore(5);
+      setDishIsVegan(false);
+      setDishNewCategory("");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to create dish");
+    }
+  };
+
+  const handleAddPrepItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await inventoryApi.createItem({
+        name: prepName.trim(),
+        quantity: Number(prepQuantity),
+        unit: prepUnit,
+        expiry_date: prepExpiryDate,
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ["inventory", "items"] });
+      toast.success("Preparation item created successfully");
+      setIsAddPrepModalOpen(false);
+      setPrepName("");
+      setPrepQuantity("");
+      setPrepUnit("kg");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to create preparation item");
+    }
+  };
+
   const renderDashboard = () => (
     <div className="space-y-8 animate-in fade-in duration-300">
       {/* Page Header */}
@@ -325,6 +517,15 @@ export default function AdminDashboard() {
           <p className="text-sm text-muted-foreground">Saturday, 28 March 2026 · The Green Table</p>
         </div>
         <span className="badge-pill bg-accent/10 text-accent border border-accent/20">🛡 Admin</span>
+      </div>
+
+      <div className="card-dineflow p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-muted-foreground font-medium">Quick Add:</span>
+          <button onClick={() => setIsAddTableModalOpen(true)} className="btn-primary text-xs px-3 py-1.5">+ Table</button>
+          <button onClick={() => setIsAddDishModalOpen(true)} className="btn-primary text-xs px-3 py-1.5">+ Dish</button>
+          <button onClick={() => setIsAddPrepModalOpen(true)} className="btn-primary text-xs px-3 py-1.5">+ Preparation Item</button>
+        </div>
       </div>
 
       {/* Stats Grid with left border stripes */}
@@ -437,12 +638,12 @@ export default function AdminDashboard() {
                     <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center text-accent shrink-0">
                       <Truck size={14} />
                     </div>
-                    <span className="truncate max-w-[120px]" title={s.supplier}>{s.supplier}</span>
+                    <span className="truncate max-w-[120px]" title={s.supplier || "Unknown Supplier"}>{s.supplier || "Unknown Supplier"}</span>
                   </td>
-                  <td className="px-6 py-4 text-muted-foreground truncate max-w-[200px]" title={s.itemCategories.join(', ')}>
-                    {s.itemCategories.join(', ')}
+                  <td className="px-6 py-4 text-muted-foreground truncate max-w-[200px]" title={(s.itemCategories || []).join(', ')}>
+                    {(s.itemCategories || []).join(', ') || "General"}
                   </td>
-                  <td className="px-6 py-4 text-muted-foreground font-mono text-xs">{s.contactNumber}</td>
+                  <td className="px-6 py-4 text-muted-foreground font-mono text-xs">{s.contactNumber || "N/A"}</td>
                   <td className="px-6 py-4">
                     <button 
                       onClick={(e) => toggleSupplierSelect(s.id, e)}
@@ -498,7 +699,11 @@ export default function AdminDashboard() {
   const renderSuppliers = () => {
     const selectedSuppliers = suppliersList.filter(s => s.isSelected);
     const customSuppliers = suppliersList.filter(s => !s.isSelected && s.isCustom);
-    const regionalSuppliers = suppliersList.filter(s => !s.isSelected && !s.isCustom && (restaurantLocation === "All" || s.location.toLowerCase().includes(restaurantLocation.toLowerCase())));
+    const regionalSuppliers = suppliersList.filter(
+      (s) => !s.isSelected && !s.isCustom && (
+        restaurantLocation === "All" || (s.location || "").toLowerCase().includes(restaurantLocation.toLowerCase())
+      )
+    );
 
     return (
       <div className="space-y-8 animate-in fade-in duration-300">
@@ -805,6 +1010,171 @@ export default function AdminDashboard() {
         )}
       </div>
 
+      {/* Add Table Modal */}
+      {isAddTableModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-card w-full max-w-md rounded-xl border border-border shadow-lg p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-display text-xl">Add Table</h2>
+              <button onClick={() => setIsAddTableModalOpen(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleAddTable} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Table Name</label>
+                <input required type="text" value={tableName} onChange={(e) => setTableName(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all"
+                  placeholder="e.g. T-21" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Capacity</label>
+                  <input required type="number" min="1" value={tableCapacity} onChange={(e) => setTableCapacity(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Status</label>
+                  <select value={tableStatus} onChange={(e) => setTableStatus(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all">
+                    <option value="available">Available</option>
+                    <option value="reserved">Reserved</option>
+                    <option value="cleaning">Cleaning</option>
+                    <option value="occupied">Occupied</option>
+                    <option value="pre-order">Pre-order</option>
+                  </select>
+                </div>
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={() => setIsAddTableModalOpen(false)}
+                  className="flex-1 px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 btn-primary py-2 text-sm">Create Table</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Dish Modal */}
+      {isAddDishModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-card w-full max-w-lg rounded-xl border border-border shadow-lg p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-display text-xl">Add Dish</h2>
+              <button onClick={() => setIsAddDishModalOpen(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleAddDish} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Dish Name</label>
+                <input required type="text" value={dishName} onChange={(e) => setDishName(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all"
+                  placeholder="e.g. Paneer Tikka" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Description</label>
+                <textarea value={dishDescription} onChange={(e) => setDishDescription(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all"
+                  rows={3} placeholder="Optional description" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Category</label>
+                  <select value={dishCategoryId} onChange={(e) => setDishCategoryId(e.target.value ? Number(e.target.value) : "")}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all">
+                    <option value="">Select category</option>
+                    {Array.isArray(menuCategoriesApi) && menuCategoriesApi.map((cat: any) => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">New Category (optional)</label>
+                  <input type="text" value={dishNewCategory} onChange={(e) => setDishNewCategory(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all"
+                    placeholder="Create new category" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Price</label>
+                  <input required type="number" min="0" step="0.01" value={dishPrice} onChange={(e) => setDishPrice(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Eco Score</label>
+                  <input required type="number" min="0" max="10" value={dishEcoScore} onChange={(e) => setDishEcoScore(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all" />
+                </div>
+                <div className="flex items-end pb-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={dishIsVegan} onChange={(e) => setDishIsVegan(e.target.checked)} />
+                    Vegan
+                  </label>
+                </div>
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={() => setIsAddDishModalOpen(false)}
+                  className="flex-1 px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 btn-primary py-2 text-sm">Create Dish</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Preparation Item Modal */}
+      {isAddPrepModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-card w-full max-w-md rounded-xl border border-border shadow-lg p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-display text-xl">Add Preparation Item</h2>
+              <button onClick={() => setIsAddPrepModalOpen(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleAddPrepItem} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Item Name</label>
+                <input required type="text" value={prepName} onChange={(e) => setPrepName(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all"
+                  placeholder="e.g. Tomatoes" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Quantity</label>
+                  <input required type="number" min="0" step="0.01" value={prepQuantity} onChange={(e) => setPrepQuantity(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Unit</label>
+                  <input required type="text" value={prepUnit} onChange={(e) => setPrepUnit(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all"
+                    placeholder="kg / L / pcs" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Expiry Date</label>
+                <input required type="date" value={prepExpiryDate} onChange={(e) => setPrepExpiryDate(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all" />
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={() => setIsAddPrepModalOpen(false)}
+                  className="flex-1 px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 btn-primary py-2 text-sm">Create Prep Item</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Inventory Setup Modal */}
       {isInventoryModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -915,11 +1285,11 @@ export default function AdminDashboard() {
                 <select required value={selectedSupplierId} onChange={e => setSelectedSupplierId(e.target.value ? Number(e.target.value) : "")}
                   className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all">
                   <option value="" disabled>Select a supplier...</option>
-                  {fetchedSuppliers.filter(s => s.itemCategories.includes(purchaseItem.category)).map(c => (
+                  {fetchedSuppliers.filter(s => (s.itemCategories || []).includes(purchaseItem.category)).map(c => (
                     <option key={c.id} value={c.id}>{c.supplier}</option>
                   ))}
                   {fetchedSuppliers.length > 0 && <option disabled>──────</option>}
-                  {fetchedSuppliers.filter(s => !s.itemCategories.includes(purchaseItem.category)).map(c => (
+                  {fetchedSuppliers.filter(s => !(s.itemCategories || []).includes(purchaseItem.category)).map(c => (
                     <option key={c.id} value={c.id}>{c.supplier} (Other Categories)</option>
                   ))}
                   {fetchedSuppliers.length === 0 && (

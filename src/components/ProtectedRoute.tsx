@@ -1,5 +1,6 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useApp, UserRole } from "@/contexts/AppContext";
+import { getAccessToken } from "@/api/auth";
 
 interface ProtectedRouteProps {
   allowedRoles: UserRole[];
@@ -7,11 +8,25 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ allowedRoles, children }: ProtectedRouteProps) {
-  const { userRole } = useApp();
+  const location = useLocation();
+  const { userRole, isAuthLoading } = useApp();
+  const tokenExists = !!getAccessToken();
 
-  // If not logged in, redirect to home/login page
-  if (!userRole) {
-    return <Navigate to="/" replace />;
+  if (isAuthLoading || (tokenExists && !userRole)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <span className="w-6 h-6 border-2 border-accent/40 border-t-accent rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground animate-pulse">Verifying credentials...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If not logged in, or token missing, redirect to home/login page
+  if (!userRole || !tokenExists) {
+    const from = `${location.pathname}${location.search}`;
+    return <Navigate to="/login" replace state={{ from }} />;
   }
 
   // Admin can access everything

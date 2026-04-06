@@ -1,7 +1,22 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
-import { tables as initialTables, TableData } from "@/data/mockData";
+import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { useMe } from "@/hooks/useUsers";
+import { getAccessToken, clearSession } from "@/api/auth";
 
 export type UserRole = "admin" | "chef" | "waiter" | "customer" | null;
+
+export interface TableData {
+  id: string;
+  pk?: number;
+  capacity: number;
+  status: "available" | "occupied" | "preorder" | "reserved" | "cleaning";
+  timeSeated?: number;
+  course?: number;
+  reservationTime?: string;
+  guestName?: string;
+  eta?: number;
+  distanceMeters?: number;
+  preOrderItems?: string[];
+}
 
 
 export interface CartItem {
@@ -36,6 +51,7 @@ interface AppContextType {
   addWasteLog: (entry: WasteLogEntry) => void;
   userRole: UserRole;
   setUserRole: React.Dispatch<React.SetStateAction<UserRole>>;
+  isAuthLoading: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -49,10 +65,45 @@ const initialWasteLogs: WasteLogEntry[] = [
 export function AppProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [ecoPoints, setEcoPoints] = useState(142);
-  const [tablesState, setTablesState] = useState<TableData[]>(initialTables);
+  const [tablesState, setTablesState] = useState<TableData[]>([]);
   const [flashSaleActive, setFlashSaleActive] = useState<Record<number, boolean>>({ 2: true });
   const [wasteLogs, setWasteLogs] = useState<WasteLogEntry[]>(initialWasteLogs);
-  const [userRole, setUserRole] = useState<UserRole>(null);
+  const [userRole, setUserRole] = useState<UserRole>(() => {
+    const storedRole = localStorage.getItem('user_role')?.toLowerCase();
+    if (storedRole === 'admin' || storedRole === 'chef' || storedRole === 'waiter' || storedRole === 'customer') {
+      return storedRole as UserRole;
+    }
+    return null;
+  });
+
+  const accessToken = getAccessToken();
+  const tokenExists = !!accessToken;
+  const { data: userData, isLoading: isUserLoading, isError } = useMe(tokenExists, accessToken);
+
+  const isAuthLoading = tokenExists && isUserLoading;
+
+  useEffect(() => {
+    if (userData && userData.role) {
+      const normalizedRole = userData.role.toLowerCase() as UserRole;
+      setUserRole(normalizedRole);
+      localStorage.setItem('user_role', normalizedRole);
+    } else if (isError) {
+      clearSession();
+      setUserRole(null);
+      localStorage.removeItem('user_role');
+    }
+  }, [userData, isError]);
+
+  useEffect(() => {
+    const onUnauthorized = () => {
+      clearSession();
+      setUserRole(null);
+      localStorage.removeItem('user_role');
+    };
+
+    window.addEventListener('auth:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', onUnauthorized);
+  }, []);
 
   const addToCart = (item: { id: number; name: string; price: number }) => {
     setCart((prev) => {
@@ -83,7 +134,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider
-      value={{ cart, addToCart, removeFromCart, updateCartQty, clearCart, ecoPoints, addEcoPoints, tablesState, setTablesState, resetAllTables, flashSaleActive, toggleFlashSale, wasteLogs, addWasteLog, userRole, setUserRole }}
+      value={{ cart, addToCart, removeFromCart, updateCartQty, clearCart, ecoPoints, addEcoPoints, tablesState, setTablesState, resetAllTables, flashSaleActive, toggleFlashSale, wasteLogs, addWasteLog, userRole, setUserRole, isAuthLoading }}
     >
       {children}
     </AppContext.Provider>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, Trash2, ClipboardList, TrendingDown, AlertTriangle } from "lucide-react";
-import { prepItems } from "@/data/mockData";
 import { useApp } from "@/contexts/AppContext";
+import { useInventoryItems } from "@/hooks/useInventory";
 import { toast } from "sonner";
 
 const REASON_OPTIONS = ["Over-prepped", "Expired", "Plate return", "Damaged"];
@@ -16,8 +16,12 @@ const reasonIcons: Record<string, string> = {
 
 export default function WasteManagement() {
   const { wasteLogs, addWasteLog } = useApp();
+  const { data: inventoryItems = [] } = useInventoryItems();
+  const itemOptions: string[] = Array.isArray(inventoryItems) && inventoryItems.length > 0
+    ? inventoryItems.map((item: any) => item.name)
+    : ["Unassigned Item"];
 
-  const [logItem, setLogItem] = useState(prepItems[0].name);
+  const [logItem, setLogItem] = useState(itemOptions[0]);
   const [logQty, setLogQty] = useState("");
   const [logUnit, setLogUnit] = useState("g");
   const [logReason, setLogReason] = useState(REASON_OPTIONS[0]);
@@ -115,8 +119,8 @@ export default function WasteManagement() {
                   onChange={(e) => setLogItem(e.target.value)}
                   className="w-full bg-background border border-border text-foreground rounded-lg px-3 py-2 text-sm appearance-none pr-8 focus:outline-none focus:ring-1 focus:ring-accent transition-all"
                 >
-                  {prepItems.map((p) => (
-                    <option key={p.id} value={p.name}>{p.icon} {p.name}</option>
+                  {itemOptions.map((name) => (
+                    <option key={name} value={name}>{name}</option>
                   ))}
                 </select>
                 <ChevronDown size={14} className="absolute right-3 top-3 text-muted-foreground pointer-events-none" />

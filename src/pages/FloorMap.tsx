@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Minus, Users, AlertCircle, X, LogOut, ShoppingBag, ChevronDown } from "lucide-react";
-import { notifications as initialNotifications, menuCategories } from "@/data/mockData";
-import { useApp } from "@/contexts/AppContext";
+import { useApp, type TableData } from "@/contexts/AppContext";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import type { TableData } from "@/data/mockData";
+import { useAlerts, useDismissAlert, useTables, useUpdateTableStatus } from "@/hooks/useFloor";
+import { useCategories, useMenuItems } from "@/hooks/useMenu";
 
 const statusConfig: Record<string, { bg: string; label: (t: TableData) => string }> = {
   available: { bg: "bg-[#74C69D]/20", label: () => "Available" },
@@ -25,13 +25,15 @@ const legendItems = [
 /* ─── New Order Modal ─────────────────────────────────────────────────────── */
 interface CartEntry { id: number; name: string; price: number; qty: number; }
 
-function NewOrderModal({ tables, onClose, onPlace }: {
+function NewOrderModal({ tables, categories, menuItems, onClose, onPlace }: {
   tables: TableData[];
+  categories: Array<{ id: number; name: string }>;
+  menuItems: Array<{ id: number; name: string; price: number; veg: boolean; desc: string; categoryId: number }>;
   onClose: () => void;
   onPlace: (tableId: string, items: CartEntry[]) => void;
 }) {
   const [tableId, setTableId] = useState("");
-  const [activeCategory, setActiveCategory] = useState(menuCategories[0].name);
+  const [activeCategory, setActiveCategory] = useState(categories[0]?.name || "");
   const [cart, setCart] = useState<CartEntry[]>([]);
 
   const addItem = (item: { id: number; name: string; price: number }) => {
@@ -60,7 +62,10 @@ function NewOrderModal({ tables, onClose, onPlace }: {
     onPlace(tableId, cart);
   };
 
-  const catItems = menuCategories.find((c) => c.name === activeCategory)?.items ?? [];
+  const catItems = menuItems.filter((item) => {
+    const category = categories.find((c) => c.id === item.categoryId);
+    return category?.name === activeCategory;
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-[2px]"
@@ -106,9 +111,9 @@ function NewOrderModal({ tables, onClose, onPlace }: {
 
         {/* ── Category Tabs ── */}
         <div className="flex gap-1 px-5 pt-3 pb-2 border-b border-border/40 overflow-x-auto">
-          {menuCategories.map((cat) => (
+          {categories.map((cat) => (
             <button
-              key={cat.name}
+              key={cat.id}
               onClick={() => setActiveCategory(cat.name)}
               className={`px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
                 activeCategory === cat.name
@@ -197,13 +202,78 @@ export default function FloorMap() {
   const { tablesState, setTablesState, resetAllTables, userRole, setUserRole } = useApp();
   const navigate = useNavigate();
   const [selectedTable, setSelectedTable] = useState<TableData | null>(null);
-  const [alerts, setAlerts] = useState(initialNotifications);
   const [showNewOrder, setShowNewOrder] = useState(false);
 
+  const { data: rawTables = [] } = useTables();
+  const { data: rawAlerts = [] } = useAlerts();
+  const { mutate: dismissAlertApi } = useDismissAlert();
+  const { mutate: updateTableStatus } = useUpdateTableStatus();
+  const { data: rawCategories = [] } = useCategories();
+  const { data: rawMenuItems = [] } = useMenuItems();
+
+  const menuCategories = useMemo(
+    () => (Array.isArray(rawCategories) ? rawCategories.map((c: any) => ({ id: c.id, name: c.name })) : []),
+    [rawCategories]
+  );
+  const menuItems = useMemo(
+    () => (Array.isArray(rawMenuItems)
+      ? rawMenuItems.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          price: Number(item.price ?? item.base_price ?? 0),
+          veg: !!item.is_vegan,
+          desc: item.description || "",
+          categoryId: item.category,
+        }))
+      : []),
+    [rawMenuItems]
+  );
+
+  const alerts = useMemo(() => {
+    if (!Array.isArray(rawAlerts)) return [];
+    return rawAlerts.map((a: any) => {
+      const type = a.type || 'table';
+      const colorMap: Record<string, string> = {
+        preorder: '#457B9D',
+        table: '#F4A261',
+        ready: '#74C69D',
+        complaint: '#E76F51',
+        assistance: '#E76F51',
+        payment: '#74C69D',
+        issue: '#E76F51',
+      };
+      return {
+        id: a.id,
+        type,
+        color: colorMap[type] || '#457B9D',
+        title: (a.type || 'alert').toUpperCase(),
+        message: a.message || 'Alert',
+        action: 'Acknowledge',
+      };
+    });
+  }, [rawAlerts]);
+
+  useEffect(() => {
+    if (!Array.isArray(rawTables)) return;
+    const mapped: TableData[] = rawTables.map((table: any) => ({
+      id: table.name || `T-${table.id}`,
+      pk: table.id,
+      capacity: table.capacity ?? 0,
+      status: table.status === 'pre-order' ? 'preorder' : table.status,
+      timeSeated: table.time_seated ? Math.max(0, Math.floor((Date.now() - new Date(table.time_seated).getTime()) / 60000)) : undefined,
+      reservationTime: undefined,
+    }));
+    setTablesState(mapped);
+  }, [rawTables, setTablesState]);
+
   const handleLogout = () => { setUserRole(null); navigate("/"); };
-  const dismissAlert = (id: number) => setAlerts((prev) => prev.filter((a) => a.id !== id));
+  const dismissAlert = (id: number) => dismissAlertApi(id);
 
   const markAvailable = (id: string) => {
+    const selected = tablesState.find((t) => t.id === id);
+    if (selected?.pk != null) {
+      updateTableStatus({ id: selected.pk, status: 'available' });
+    }
     setTablesState((prev) => prev.map((t) => (t.id === id ? { ...t, status: "available" as const, timeSeated: undefined, course: undefined, guestName: undefined, eta: undefined, distanceMeters: undefined, reservationTime: undefined } : t)));
     setSelectedTable(null);
     toast.success(`${id} marked available`);
@@ -401,6 +471,8 @@ export default function FloorMap() {
       {showNewOrder && (
         <NewOrderModal
           tables={tablesState}
+          categories={menuCategories}
+          menuItems={menuItems}
           onClose={() => setShowNewOrder(false)}
           onPlace={handlePlaceOrder}
         />

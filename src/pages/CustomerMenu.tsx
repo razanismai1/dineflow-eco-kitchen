@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { Leaf, Plus, Minus, ShoppingCart, Share2, X, ArrowRight, QrCode } from "lucide-react";
-import { flashSales, menuCategories, type MenuItem } from "@/data/mockData";
 import { useApp } from "@/contexts/AppContext";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router-dom";
+import { useCategories, useFlashSales, useMenuItems } from "@/hooks/useMenu";
+import { useCreateOrder } from "@/hooks/useOrders";
 
 type Filter = "All" | "Veg" | "Non-Veg" | "Flash Deals" | "Under ₹200";
 const filters: Filter[] = ["All", "Veg", "Non-Veg", "Flash Deals", "Under ₹200"];
@@ -52,38 +53,90 @@ export default function CustomerMenu() {
   const [cartOpen, setCartOpen] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
 
+  const { data: rawCategories = [], isLoading: categoriesLoading, error: categoriesError } = useCategories();
+  const { data: rawItems = [], isLoading: itemsLoading, error: itemsError } = useMenuItems();
+  const { data: rawFlashSales = [], isLoading: flashLoading } = useFlashSales();
+  const { mutate: createOrder } = useCreateOrder();
+
   const totalItems = cart.reduce((a, c) => a + c.quantity, 0);
   const totalPrice = cart.reduce((a, c) => a + c.price * c.quantity, 0);
 
+  const menuItems = Array.isArray(rawItems)
+    ? rawItems.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        desc: item.description || "",
+        veg: !!item.is_vegan,
+        ecoScore: Number(item.eco_score ?? 0),
+        price: Number(item.price ?? item.base_price ?? 0),
+        categoryId: item.category,
+      }))
+    : [];
+
+  const flashSales = Array.isArray(rawFlashSales)
+    ? rawFlashSales.map((sale: any) => {
+        const base = Number(sale.menu_item_details?.base_price ?? sale.menu_item_base_price ?? 0);
+        const discountPct = Number(sale.discount_percentage ?? 0);
+        const salePrice = Math.max(0, Math.round((base * (100 - discountPct)) / 100));
+        const endsAt = sale.active_until ? new Date(sale.active_until).getTime() : Date.now();
+        const endsIn = Math.max(0, Math.floor((endsAt - Date.now()) / 1000));
+        return {
+          id: sale.id,
+          name: sale.menu_item_name || sale.menu_item_details?.name || "Flash Deal",
+          originalPrice: base,
+          salePrice,
+          endsIn,
+          co2Saved: Number((discountPct / 25).toFixed(1)),
+        };
+      })
+    : [];
+
   const flashSaleNames = flashSales.map((f) => f.name);
 
-  const filteredCategories = menuCategories.map((cat) => ({
-    ...cat,
-    items: cat.items.filter((item) => {
-      if (activeFilter === "Veg") return item.veg;
-      if (activeFilter === "Non-Veg") return !item.veg;
-      if (activeFilter === "Flash Deals") return flashSaleNames.includes(item.name);
-      if (activeFilter === "Under ₹200") return item.price < 200;
-      return true;
-    }),
-  })).filter((cat) => cat.items.length > 0);
+  const menuCategories = (Array.isArray(rawCategories) ? rawCategories : []).map((cat: any) => ({
+    id: cat.id,
+    name: cat.name,
+    items: menuItems.filter((item) => item.categoryId === cat.id),
+  }));
+
+  const filteredCategories = menuCategories
+    .map((cat) => ({
+      ...cat,
+      items: (Array.isArray(cat.items) ? cat.items : []).filter((item) => {
+        if (activeFilter === "Veg") return item.veg;
+        if (activeFilter === "Non-Veg") return !item.veg;
+        if (activeFilter === "Flash Deals") return flashSaleNames.includes(item.name);
+        if (activeFilter === "Under ₹200") return item.price < 200;
+        return true;
+      }),
+    }))
+    .filter((cat) => cat.items.length > 0);
 
   const placeOrder = () => {
-    setCartOpen(false);
-    clearCart();
-    addEcoPoints(85);
-    // If arrived via QR code, mark that table as occupied
-    if (tableId) {
-      setTablesState((prev) =>
-        prev.map((t) =>
-          t.id === tableId
-            ? { ...t, status: "occupied" as const, timeSeated: 0, course: 1 }
-            : t
-        )
-      );
-      toast.success(`Order placed for ${tableId}!`);
-    }
-    setShowReceipt(true);
+    createOrder(
+      { items: cart.map(item => ({ id: item.id, quantity: item.quantity })), extra: { table_id: tableId } },
+      {
+        onSuccess: () => {
+          setCartOpen(false);
+          clearCart();
+          addEcoPoints(85);
+          if (tableId) {
+            setTablesState((prev) =>
+              prev.map((t) =>
+                t.id === tableId
+                  ? { ...t, status: "occupied" as const, timeSeated: 0, course: 1 }
+                  : t
+              )
+            );
+            toast.success(`Order placed for ${tableId}!`);
+          }
+          setShowReceipt(true);
+        },
+        onError: (err) => {
+          toast.error(err.message || 'Failed to place order.');
+        }
+      }
+    );
   };
 
   const handleShare = async () => {
@@ -172,7 +225,12 @@ export default function CustomerMenu() {
         {/* Flash Sale Carousel */}
         <section className="px-4 pt-4">
           <p className="text-sm font-medium mb-3">♻️ Zero-Waste Flash Deals — Limited Time!</p>
-          <div className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory scrollbar-hide">
+          {flashLoading ? (
+             <div className="text-sm text-muted-foreground p-3">Loading flash sales...</div>
+          ) : flashSales.length === 0 ? (
+             <div className="text-sm text-muted-foreground p-3">No active flash deals right now.</div>
+          ) : (
+            <div className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory scrollbar-hide">
             {flashSales.map((fs, i) => (
               <div key={fs.id} className="min-w-[200px] snap-start card-dineflow overflow-hidden shrink-0">
                 <div className={`h-28 bg-gradient-to-br ${flashGradients[i % flashGradients.length]} flex items-center justify-center`}>
@@ -194,6 +252,7 @@ export default function CustomerMenu() {
               </div>
             ))}
           </div>
+          )}
         </section>
 
         {/* Filter Bar */}
@@ -209,7 +268,12 @@ export default function CustomerMenu() {
         </div>
 
         {/* Menu Items */}
-        <section className="px-4 space-y-6 pb-4">
+        <section className="px-4 space-y-6 pb-4 mt-4">
+           {(categoriesLoading || itemsLoading) && <div className="text-sm text-muted-foreground p-4 text-center">Loading menu...</div>}
+           {(categoriesError || itemsError) && <div className="text-sm text-red-500 p-4 text-center text-coral">Failed to load menu.</div>}
+           {!categoriesLoading && !itemsLoading && filteredCategories.length === 0 && (
+             <div className="text-sm text-center text-muted-foreground py-10">No items match your filter.</div>
+          )}
           {filteredCategories.map((cat) => (
             <div key={cat.name}>
               <h3 className="font-display text-lg sticky top-[73px] bg-background py-2 z-30">{cat.name}</h3>

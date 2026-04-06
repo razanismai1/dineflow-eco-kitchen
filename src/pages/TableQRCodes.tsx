@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { tables } from "@/data/mockData";
 import { Printer, Download, QrCode, Leaf } from "lucide-react";
+import { useTables } from "@/hooks/useFloor";
 
 const BASE_URL = typeof window !== "undefined" ? window.location.origin : "https://marvelous-youtiao-ab8734.netlify.app/";
 
@@ -15,6 +15,15 @@ const statusColors: Record<string, string> = {
 
 export default function TableQRCodes() {
   const printRef = useRef<HTMLDivElement>(null);
+  const { data: rawTables = [] } = useTables();
+
+  const tables = Array.isArray(rawTables)
+    ? rawTables.map((table: any) => ({
+        id: table.name || `T-${table.id}`,
+        capacity: table.capacity ?? 0,
+        status: table.status === "pre-order" ? "preorder" : table.status,
+      }))
+    : [];
 
   const handlePrint = () => {
     window.print();

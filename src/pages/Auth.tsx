@@ -1,6 +1,9 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "@/contexts/AppContext";
+import { useLogin, useRegister } from "@/hooks/useAuth";
+import { usersApi } from "@/api/users";
+import { toast } from "sonner";
 import {
   Leaf, Eye, EyeOff, Mail, Lock, User, ChefHat, Map, UtensilsCrossed,
   LayoutDashboard, ArrowRight, Check
@@ -52,6 +55,22 @@ const roles = [
 
 type RoleId = (typeof roles)[number]["id"];
 
+const defaultRouteByRole: Record<RoleId, string> = {
+  admin: "/admin",
+  chef: "/kitchen",
+  waiter: "/floor",
+  customer: "/menu",
+};
+
+const isRouteAllowedForRole = (route: string, role: RoleId) => {
+  if (!route.startsWith("/")) return false;
+  if (route.startsWith("/admin") || route.startsWith("/qr")) return role === "admin";
+  if (route.startsWith("/kitchen") || route.startsWith("/waste")) return role === "admin" || role === "chef";
+  if (route.startsWith("/floor")) return role === "admin" || role === "waiter";
+  if (route.startsWith("/menu") || route.startsWith("/")) return true;
+  return false;
+};
+
 /* ── Floating leaf blobs (decorative) ───────────────────────────────────── */
 const blobs = [
   { w: 340, h: 340, x: -80, y: -80, opacity: 0.18, delay: "0s" },
@@ -62,6 +81,9 @@ const blobs = [
 export default function Auth() {
   const { setUserRole } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { mutateAsync: loginApi } = useLogin();
+  const { mutateAsync: registerApi } = useRegister();
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [name, setName] = useState("");
@@ -72,7 +94,7 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (!email || !password) { setError("Please fill in all fields."); return; }
@@ -80,14 +102,48 @@ export default function Auth() {
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
 
     setLoading(true);
-    // Simulate auth delay
-    setTimeout(() => {
-      const role = selectedRole === "waiter" ? "waiter" : selectedRole;
-      setUserRole(role as "admin" | "chef" | "waiter" | "customer");
-      const destRole = roles.find((r) => r.id === selectedRole);
-      navigate(destRole?.dest ?? "/");
+    try {
+      if (mode === "login") {
+         setUserRole(null);
+         const loginData = await loginApi({ email, password });
+         let fetchedRole = loginData?.role?.toLowerCase();
+
+         if (!fetchedRole) {
+           const userData = await usersApi.getMe();
+           fetchedRole = userData?.role?.toLowerCase();
+         }
+
+         if (!fetchedRole) {
+           throw new Error("Unable to determine user role after login.");
+         }
+         
+         const role = fetchedRole === "waiter" ? "waiter" : fetchedRole;
+         setUserRole(role as "admin" | "chef" | "waiter" | "customer");
+         localStorage.setItem("user_role", role);
+
+         const normalizedRole = role as RoleId;
+         const from = (location.state as { from?: string } | null)?.from;
+         const nextRoute = from && isRouteAllowedForRole(from, normalizedRole)
+           ? from
+           : defaultRouteByRole[normalizedRole];
+
+         navigate(nextRoute, { replace: true });
+      } else {
+        await registerApi({
+          email,
+          password,
+          name,
+          username: name,
+          role: selectedRole,
+        });
+         toast.success("Account created successfully! Please log in.");
+         setMode("login");
+      }
+    } catch (err: any) {
+      setError(err?.message || "Failed to authenticate with server. Please try again.");
+    } finally {
       setLoading(false);
-    }, 900);
+    }
   };
 
   const activeRole = roles.find((r) => r.id === selectedRole)!;
@@ -255,28 +311,30 @@ export default function Auth() {
               </div>
 
               {/* Role selector */}
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your Role</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {roles.map((role) => {
-                    const isActive = selectedRole === role.id;
-                    return (
-                      <button key={role.id} type="button" onClick={() => setSelectedRole(role.id)}
-                        className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition-all ${
-                          isActive
-                            ? `${role.activeBg} border-transparent shadow-sm`
-                            : `${role.bg} hover:border-opacity-60`
-                        }`}>
-                        <role.icon size={15} className={isActive ? "opacity-90" : `text-${role.color}`} />
-                        <div className="min-w-0">
-                          <p className={`text-xs font-semibold truncate ${isActive ? "" : "text-foreground"}`}>{role.label}</p>
-                          <p className={`text-[10px] truncate ${isActive ? "opacity-70" : "text-muted-foreground"}`}>{role.sub}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
+              {mode === "signup" && (
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your Role</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {roles.map((role) => {
+                      const isActive = selectedRole === role.id;
+                      return (
+                        <button key={role.id} type="button" onClick={() => setSelectedRole(role.id)}
+                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition-all ${
+                            isActive
+                              ? `${role.activeBg} border-transparent shadow-sm`
+                              : `${role.bg} hover:border-opacity-60`
+                          }`}>
+                          <role.icon size={15} className={isActive ? "opacity-90" : `text-${role.color}`} />
+                          <div className="min-w-0">
+                            <p className={`text-xs font-semibold truncate ${isActive ? "" : "text-foreground"}`}>{role.label}</p>
+                            <p className={`text-[10px] truncate ${isActive ? "opacity-70" : "text-muted-foreground"}`}>{role.sub}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Error */}
               {error && (

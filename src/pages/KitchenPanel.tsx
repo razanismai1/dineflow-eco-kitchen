@@ -1,8 +1,31 @@
 import { useState, useEffect } from "react";
 import { Plus, Minus, Zap, ClipboardList, CheckCircle2, Clock, ChefHat, LogOut } from "lucide-react";
-import { prepItems, flashSales, initialOrderItems, OrderItem } from "@/data/mockData";
 import { useApp } from "@/contexts/AppContext";
 import { useNavigate } from "react-router-dom";
+import { useOrders, useUpdateOrderStatus } from "@/hooks/useOrders";
+import { useInventoryItems } from "@/hooks/useInventory";
+import { useFlashSales } from "@/hooks/useMenu";
+
+type KitchenOrderItem = {
+  id: string;
+  orderPk: number;
+  orderId: string;
+  name: string;
+  status: "new" | "preparing" | "done";
+  createdAt: number;
+};
+
+type PrepItem = {
+  id: number;
+  name: string;
+  icon: string;
+  target: number;
+  usual: number;
+  prepped: number;
+  aiTag: { type: string; label: string; color: string } | null;
+  expiryAlert?: boolean;
+  stock?: string;
+};
 
 function LiveClock() {
   const [time, setTime] = useState(new Date());
@@ -24,7 +47,7 @@ const tagColors: Record<string, string> = {
   peak:    "bg-mint/15 text-mint border border-mint/25",
 };
 
-function StatusBadge({ status }: { status: OrderItem["status"] }) {
+function StatusBadge({ status }: { status: KitchenOrderItem["status"] }) {
   if (status === "preparing")
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-coral/15 text-coral border border-coral/20">
@@ -40,7 +63,7 @@ function StatusBadge({ status }: { status: OrderItem["status"] }) {
   );
 }
 
-function OrderCard({ item, onAction }: { item: OrderItem; onAction: () => void }) {
+function OrderCard({ item, onAction }: { item: KitchenOrderItem; onAction: () => void }) {
   const isPreparing = item.status === "preparing";
   return (
     <div
@@ -78,16 +101,82 @@ function OrderCard({ item, onAction }: { item: OrderItem; onAction: () => void }
 export default function KitchenPanel() {
   const { flashSaleActive, toggleFlashSale, userRole, setUserRole } = useApp();
   const navigate = useNavigate();
-  const [orderItems, setOrderItems] = useState<OrderItem[]>(initialOrderItems);
-  const [localPrepItems, setLocalPrepItems] = useState(prepItems);
+  const { data: rawOrders = [] } = useOrders();
+  const { data: rawInventory = [] } = useInventoryItems();
+  const { data: rawFlashSales = [] } = useFlashSales();
+  const { mutate: updateOrderStatus } = useUpdateOrderStatus();
+  const [orderItems, setOrderItems] = useState<KitchenOrderItem[]>([]);
+  const [localPrepItems, setLocalPrepItems] = useState<PrepItem[]>([]);
   const [activeTab, setActiveTab] = useState<"orders" | "prep">("orders");
+
+  useEffect(() => {
+    if (!Array.isArray(rawOrders)) return;
+    const mapped: KitchenOrderItem[] = rawOrders.map((order: any) => {
+      const label = Array.isArray(order.items) && order.items.length > 0
+        ? order.items.map((item: any) => item.name || `Item ${item.id}`).join(", ")
+        : "Order";
+      const statusMap: Record<string, KitchenOrderItem["status"]> = {
+        queued: "new",
+        preparing: "preparing",
+        done: "done",
+      };
+      return {
+        id: `order-${order.id}`,
+        orderPk: Number(order.id),
+        orderId: `#${order.id}`,
+        name: label,
+        status: statusMap[order.status] || "new",
+        createdAt: new Date(order.created_at || Date.now()).getTime(),
+      };
+    });
+    setOrderItems(mapped);
+  }, [rawOrders]);
+
+  useEffect(() => {
+    if (!Array.isArray(rawInventory)) return;
+    const mapped: PrepItem[] = rawInventory.map((item: any) => {
+      const quantity = Number(item.quantity ?? 0);
+      const target = Math.max(1, Math.round(quantity * 1.1));
+      return {
+        id: item.id,
+        name: item.name,
+        icon: "🍽️",
+        target,
+        usual: quantity,
+        prepped: quantity,
+        aiTag: null,
+        expiryAlert: false,
+      };
+    });
+    setLocalPrepItems(mapped);
+  }, [rawInventory]);
+
+  const flashSales = Array.isArray(rawFlashSales)
+    ? rawFlashSales.map((fs: any) => ({
+        id: fs.id,
+        name: fs.menu_item_name || `Sale ${fs.id}`,
+        originalPrice: Number(fs.menu_item_base_price ?? 0),
+        salePrice: Math.max(0, Math.round(Number(fs.menu_item_base_price ?? 0) * (100 - Number(fs.discount_percentage ?? 0)) / 100)),
+        stock: "Active",
+      }))
+    : [];
 
   const handleLogout = () => { setUserRole(null); navigate("/"); };
 
-  const handleUpdateItemStatus = (id: string, newStatus: OrderItem["status"]) => {
+  const handleUpdateItemStatus = (id: string, newStatus: KitchenOrderItem["status"]) => {
     setOrderItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, status: newStatus } : item))
     );
+
+    const order = orderItems.find((item) => item.id === id);
+    if (order) {
+      const statusMap: Record<KitchenOrderItem["status"], string> = {
+        new: "queued",
+        preparing: "preparing",
+        done: "done",
+      };
+      updateOrderStatus({ id: order.orderPk, status: statusMap[newStatus] });
+    }
   };
 
   const handleUpdatePrep = (id: number, increment: number) => {

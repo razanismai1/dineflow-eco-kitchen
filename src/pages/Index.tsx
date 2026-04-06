@@ -57,11 +57,9 @@ const pipeline = [
 ];
 
 export default function LandingPage() {
-  const { setUserRole } = useApp();
   const navigate = useNavigate();
 
   const handleRoleSelect = (role: UserRole) => {
-    setUserRole(role);
     switch (role) {
       case "admin": navigate("/admin"); break;
       case "chef": navigate("/kitchen"); break;
@@ -129,7 +127,7 @@ export default function LandingPage() {
           >
             Sign In <ArrowRight size={15} />
           </button>
-          <span className="text-muted-foreground text-sm">or quick-enter below</span>
+          <span className="text-muted-foreground text-sm">or select your module below</span>
         </div>
       </div>
 
