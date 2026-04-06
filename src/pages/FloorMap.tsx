@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Plus, Minus, Users, AlertCircle, X, LogOut, ShoppingBag, ChevronDown } from "lucide-react";
 import { useApp, type TableData } from "@/contexts/AppContext";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { useAlerts, useDismissAlert, useTables, useUpdateTableStatus } from "@/hooks/useFloor";
+import { useAlerts, useCreateTable, useDismissAlert, useTables, useUpdateTableStatus } from "@/hooks/useFloor";
 import { useCategories, useMenuItems } from "@/hooks/useMenu";
+import { useCreateOrder } from "@/hooks/useOrders";
 
 const statusConfig: Record<string, { bg: string; label: (t: TableData) => string }> = {
   available: { bg: "bg-[#74C69D]/20", label: () => "Available" },
@@ -25,16 +26,24 @@ const legendItems = [
 /* ─── New Order Modal ─────────────────────────────────────────────────────── */
 interface CartEntry { id: number; name: string; price: number; qty: number; }
 
-function NewOrderModal({ tables, categories, menuItems, onClose, onPlace }: {
+function NewOrderModal({ tables, categories, menuItems, onClose, onPlace, defaultTablePk, defaultTableLabel }: {
   tables: TableData[];
   categories: Array<{ id: number; name: string }>;
   menuItems: Array<{ id: number; name: string; price: number; veg: boolean; desc: string; categoryId: number }>;
   onClose: () => void;
-  onPlace: (tableId: string, items: CartEntry[]) => void;
+  onPlace: (tablePk: number, tableLabel: string, items: CartEntry[]) => void;
+  defaultTablePk?: number;
+  defaultTableLabel?: string;
 }) {
-  const [tableId, setTableId] = useState("");
+  const [tableId, setTableId] = useState(defaultTablePk ? String(defaultTablePk) : "");
   const [activeCategory, setActiveCategory] = useState(categories[0]?.name || "");
   const [cart, setCart] = useState<CartEntry[]>([]);
+
+  useEffect(() => {
+    if (defaultTablePk) {
+      setTableId(String(defaultTablePk));
+    }
+  }, [defaultTablePk]);
 
   const addItem = (item: { id: number; name: string; price: number }) => {
     setCart((prev) => {
@@ -59,7 +68,13 @@ function NewOrderModal({ tables, categories, menuItems, onClose, onPlace }: {
   const handlePlace = () => {
     if (!tableId) { toast.error("Please select a table"); return; }
     if (cart.length === 0) { toast.error("Add at least one item"); return; }
-    onPlace(tableId, cart);
+    const selectedTable = tables.find((table) => String(table.pk ?? table.id) === tableId);
+    const tablePk = selectedTable?.pk;
+    if (!tablePk) {
+      toast.error("Could not resolve the selected table");
+      return;
+    }
+    onPlace(tablePk, selectedTable.id, cart);
   };
 
   const catItems = menuItems.filter((item) => {
@@ -91,6 +106,12 @@ function NewOrderModal({ tables, categories, menuItems, onClose, onPlace }: {
         {/* ── Table Selector ── */}
         <div className="px-5 pt-4 pb-3 border-b border-border/40">
           <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Select Table</label>
+          {defaultTableLabel && (
+            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+              Ordering for {defaultTableLabel}
+            </div>
+          )}
           <div className="relative">
             <select
               value={tableId}
@@ -99,7 +120,7 @@ function NewOrderModal({ tables, categories, menuItems, onClose, onPlace }: {
             >
               <option value="">— Choose a table —</option>
               {tables.map((t) => (
-                <option key={t.id} value={t.id} disabled={t.status !== "available"}>
+                <option key={t.pk ?? t.id} value={String(t.pk ?? t.id)} disabled={t.status !== "available"}>
                   {t.id} · {t.capacity} seats
                   {t.status !== "available" ? ` (${t.status})` : " · Available"}
                 </option>
@@ -202,12 +223,19 @@ export default function FloorMap() {
   const { tablesState, setTablesState, resetAllTables, userRole, setUserRole } = useApp();
   const navigate = useNavigate();
   const [selectedTable, setSelectedTable] = useState<TableData | null>(null);
+  const [orderTablePreset, setOrderTablePreset] = useState<TableData | null>(null);
   const [showNewOrder, setShowNewOrder] = useState(false);
+  const [showAddTableModal, setShowAddTableModal] = useState(false);
+  const [tableName, setTableName] = useState("");
+  const [tableCapacity, setTableCapacity] = useState<number | string>(4);
+  const [tableStatus, setTableStatus] = useState("available");
 
   const { data: rawTables = [] } = useTables();
   const { data: rawAlerts = [] } = useAlerts();
+  const { mutate: createTable } = useCreateTable();
   const { mutate: dismissAlertApi } = useDismissAlert();
   const { mutate: updateTableStatus } = useUpdateTableStatus();
+  const { mutate: createOrder } = useCreateOrder();
   const { data: rawCategories = [] } = useCategories();
   const { data: rawMenuItems = [] } = useMenuItems();
 
@@ -279,17 +307,54 @@ export default function FloorMap() {
     toast.success(`${id} marked available`);
   };
 
-  const handlePlaceOrder = (tableId: string, items: { id: number; name: string; price: number; qty: number }[]) => {
-    setTablesState((prev) =>
-      prev.map((t) =>
-        t.id === tableId
-          ? { ...t, status: "occupied" as const, timeSeated: 0, course: 1 }
-          : t
-      )
+  const handlePlaceOrder = (tablePk: number, tableLabel: string, items: { id: number; name: string; price: number; qty: number }[]) => {
+    createOrder(
+      {
+        items: items.map((item) => ({ id: item.id, quantity: item.qty })),
+        extra: { table_id: tablePk },
+      },
+      {
+        onSuccess: () => {
+          setTablesState((prev) =>
+            prev.map((table) =>
+              table.pk === tablePk || table.id === tableLabel
+                ? { ...table, status: "occupied" as const, timeSeated: 0, course: 1 }
+                : table
+            )
+          );
+          const names = items.map((i) => `${i.name} ×${i.qty}`).join(", ");
+          toast.success(`Order placed for ${tableLabel}`, { description: names });
+          setOrderTablePreset(null);
+          setShowNewOrder(false);
+        },
+        onError: (err) => {
+          toast.error(err.message || "Failed to place order.");
+        },
+      }
     );
-    const names = items.map((i) => `${i.name} ×${i.qty}`).join(", ");
-    toast.success(`Order placed for ${tableId}`, { description: names });
-    setShowNewOrder(false);
+  };
+
+  const handleAddTable = (e: FormEvent) => {
+    e.preventDefault();
+    createTable(
+      {
+        name: tableName.trim(),
+        capacity: Number(tableCapacity),
+        status: tableStatus,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Table created successfully");
+          setShowAddTableModal(false);
+          setTableName("");
+          setTableCapacity(4);
+          setTableStatus("available");
+        },
+        onError: (err) => {
+          toast.error(err.message || "Failed to create table.");
+        },
+      }
+    );
   };
 
   return (
@@ -308,10 +373,21 @@ export default function FloorMap() {
         <div className="flex items-center gap-2">
           <button
             className="btn-primary flex items-center gap-1.5 text-sm"
-            onClick={() => setShowNewOrder(true)}
+            onClick={() => {
+              setOrderTablePreset(null);
+              setShowNewOrder(true);
+            }}
           >
             <Plus size={16} /> New Order
           </button>
+          {userRole === "admin" && (
+            <button
+              className="px-3 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
+              onClick={() => setShowAddTableModal(true)}
+            >
+              + Add Table
+            </button>
+          )}
           {userRole !== "admin" && (
             <button
               onClick={handleLogout}
@@ -448,6 +524,7 @@ export default function FloorMap() {
             )}
             <div className="flex gap-3 pt-1">
               <button className="btn-primary flex-1" onClick={() => {
+                setOrderTablePreset(selectedTable);
                 setSelectedTable(null);
                 setShowNewOrder(true);
               }}>
@@ -473,9 +550,89 @@ export default function FloorMap() {
           tables={tablesState}
           categories={menuCategories}
           menuItems={menuItems}
-          onClose={() => setShowNewOrder(false)}
+          onClose={() => {
+            setShowNewOrder(false);
+            setOrderTablePreset(null);
+          }}
           onPlace={handlePlaceOrder}
+          defaultTablePk={orderTablePreset?.pk}
+          defaultTableLabel={orderTablePreset?.id}
         />
+      )}
+
+      {/* Add Table Modal (Admin only) */}
+      {userRole === "admin" && showAddTableModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px]" onClick={() => setShowAddTableModal(false)}>
+          <div
+            className="frosted-glass w-full max-w-md rounded-2xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="font-display text-xl">Add Table</h2>
+              <button
+                onClick={() => setShowAddTableModal(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddTable} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Table Name</label>
+                <input
+                  required
+                  type="text"
+                  value={tableName}
+                  onChange={(e) => setTableName(e.target.value)}
+                  placeholder="e.g. T-21"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Capacity</label>
+                  <input
+                    required
+                    type="number"
+                    min="1"
+                    value={tableCapacity}
+                    onChange={(e) => setTableCapacity(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Status</label>
+                  <select
+                    value={tableStatus}
+                    onChange={(e) => setTableStatus(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+                  >
+                    <option value="available">Available</option>
+                    <option value="reserved">Reserved</option>
+                    <option value="cleaning">Cleaning</option>
+                    <option value="occupied">Occupied</option>
+                    <option value="pre-order">Pre-order</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddTableModal(false)}
+                  className="flex-1 px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 btn-primary py-2 text-sm">
+                  Create Table
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

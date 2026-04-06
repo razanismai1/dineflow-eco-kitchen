@@ -19,7 +19,8 @@ export default function TableQRCodes() {
 
   const tables = Array.isArray(rawTables)
     ? rawTables.map((table: any) => ({
-        id: table.name || `T-${table.id}`,
+        id: table.id,
+        label: table.name || `T-${table.id}`,
         capacity: table.capacity ?? 0,
         status: table.status === "pre-order" ? "preorder" : table.status,
       }))
@@ -59,13 +60,13 @@ export default function TableQRCodes() {
       {/* Info bar */}
       <div className="px-6 py-3 bg-muted/40 border-b border-border text-xs text-muted-foreground flex items-center gap-2">
         <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-        Each QR code links to <code className="bg-muted px-1 rounded text-foreground font-mono">/menu?table=T-XX</code> — customers scan and order directly from their phone.
+        Each QR code links to <code className="bg-muted px-1 rounded text-foreground font-mono">/menu?table_id=123</code> — customers scan and order directly from their phone.
       </div>
 
       {/* QR Grid */}
       <div ref={printRef} className="p-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
         {tables.map((table) => {
-          const url = `${BASE_URL}/menu?table=${table.id}`;
+          const url = `${BASE_URL}/menu?table_id=${table.id}&table=${encodeURIComponent(table.label)}`;
           const statusClass = statusColors[table.status] ?? statusColors.available;
 
           return (
@@ -74,7 +75,7 @@ export default function TableQRCodes() {
             >
               {/* Table label */}
               <div className="w-full flex items-center justify-between">
-                <span className="font-mono font-bold text-sm">{table.id}</span>
+                <span className="font-mono font-bold text-sm">{table.label}</span>
                 <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${statusClass} capitalize`}>
                   {table.status}
                 </span>
@@ -83,6 +84,7 @@ export default function TableQRCodes() {
               {/* QR Code */}
               <div className="bg-white rounded-xl p-2.5 shadow-inner">
                 <QRCodeSVG
+                  id={`qr-${table.id}`}
                   value={url}
                   size={110}
                   bgColor="#ffffff"
@@ -96,7 +98,7 @@ export default function TableQRCodes() {
               <div className="text-center space-y-0.5">
                 <p className="text-xs font-medium text-foreground">{table.capacity} seat{table.capacity !== 1 ? "s" : ""}</p>
                 <p className="text-[10px] text-muted-foreground font-mono truncate w-28 text-center">
-                  /menu?table={table.id}
+                  /menu?table_id={table.id}
                 </p>
               </div>
 
@@ -109,7 +111,7 @@ export default function TableQRCodes() {
                   const blob = new Blob([svgData], { type: "image/svg+xml" });
                   const link = document.createElement("a");
                   link.href = URL.createObjectURL(blob);
-                  link.download = `QR-${table.id}.svg`;
+                  link.download = `QR-${table.label}.svg`;
                   link.click();
                 }}
                 className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"

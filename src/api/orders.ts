@@ -1,5 +1,29 @@
 import { apiClient } from './client';
-import { fromOrderResponse, toOrderCreatePayload } from './mappers';
+import { fromOrderResponse } from './mappers';
+
+async function resolveTablePk(tableRef: unknown): Promise<number | undefined> {
+  if (typeof tableRef === 'number' && Number.isInteger(tableRef) && tableRef > 0) {
+    return tableRef;
+  }
+
+  if (typeof tableRef === 'string') {
+    const trimmed = tableRef.trim();
+    if (!trimmed) return undefined;
+
+    const directNumber = Number(trimmed);
+    if (Number.isInteger(directNumber) && directNumber > 0) {
+      return directNumber;
+    }
+
+    const qrMatch = trimmed.match(/^T-(\d+)$/i);
+    if (qrMatch) {
+      const qrNumber = Number(qrMatch[1]);
+      return Number.isInteger(qrNumber) && qrNumber > 0 ? qrNumber : undefined;
+    }
+  }
+
+  return undefined;
+}
 
 export const ordersApi = {
   getOrders: async (params?: { status?: string; table_id?: string | number }) => {
@@ -30,9 +54,9 @@ export const ordersApi = {
       })),
     };
 
-    const tableId = extra?.table_id ?? extra?.table;
-    if (tableId !== undefined && tableId !== null && tableId !== '') {
-      payload.table_id = tableId;
+    const resolvedTablePk = await resolveTablePk(extra?.table_id ?? extra?.table);
+    if (resolvedTablePk) {
+      payload.table_id = resolvedTablePk;
     }
 
     const { data } = await apiClient.post('/orders/', payload);

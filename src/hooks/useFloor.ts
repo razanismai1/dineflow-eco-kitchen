@@ -9,6 +9,17 @@ export function useTables() {
   });
 }
 
+export function useCreateTable() {
+  const queryClient = useQueryClient();
+
+  return useMutation<any, NormalizedError, { name: string; capacity: number; status?: string }>({
+    mutationFn: (payload) => floorApi.createTable(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['floor', 'tables'] });
+    },
+  });
+}
+
 export function useUpdateTableStatus() {
   const queryClient = useQueryClient();
 

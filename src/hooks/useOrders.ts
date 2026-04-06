@@ -6,6 +6,9 @@ export function useOrders(params?: { status?: string; table_id?: string | number
   return useQuery({
     queryKey: ['orders', params],
     queryFn: () => ordersApi.getOrders(params),
+    refetchInterval: 5000,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 }
 
@@ -59,6 +62,7 @@ export function useCreateOrder() {
     mutationFn: (args) => ordersApi.createOrder(args.items, args.extra),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['floor', 'tables'] });
     }
   });
 }

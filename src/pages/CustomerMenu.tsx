@@ -48,7 +48,8 @@ function EcoScore({ score }: { score: number }) {
 export default function CustomerMenu() {
   const { cart, addToCart, removeFromCart, updateCartQty, clearCart, ecoPoints, addEcoPoints, setTablesState } = useApp();
   const [searchParams] = useSearchParams();
-  const tableId = searchParams.get("table"); // e.g. "T-01" from QR scan
+  const tableId = searchParams.get("table_id") ?? searchParams.get("table");
+  const tableLabel = searchParams.get("table") ?? (tableId ? `T-${tableId}` : null);
   const [activeFilter, setActiveFilter] = useState<Filter>("All");
   const [cartOpen, setCartOpen] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -112,7 +113,14 @@ export default function CustomerMenu() {
     }))
     .filter((cat) => cat.items.length > 0);
 
+  const canPlaceOrder = !!tableId;
+
   const placeOrder = () => {
+    if (!tableId) {
+      toast.error("Please scan the QR code to select your table before ordering.");
+      return;
+    }
+
     createOrder(
       { items: cart.map(item => ({ id: item.id, quantity: item.quantity })), extra: { table_id: tableId } },
       {
@@ -120,15 +128,15 @@ export default function CustomerMenu() {
           setCartOpen(false);
           clearCart();
           addEcoPoints(85);
-          if (tableId) {
+          if (tableLabel) {
             setTablesState((prev) =>
               prev.map((t) =>
-                t.id === tableId
+                t.id === tableLabel
                   ? { ...t, status: "occupied" as const, timeSeated: 0, course: 1 }
                   : t
               )
             );
-            toast.success(`Order placed for ${tableId}!`);
+            toast.success(`Order placed for ${tableLabel}!`);
           }
           setShowReceipt(true);
         },
@@ -178,7 +186,7 @@ export default function CustomerMenu() {
           </div>
 
           <div className="w-16 h-px mx-auto" style={{ background: "#F5F0E840" }} />
-          <p className="text-sm opacity-70">The Green Table{tableId ? ` · ${tableId}` : ""} · {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
+          <p className="text-sm opacity-70">The Green Table{tableLabel ? ` · ${tableLabel}` : ""} · {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
           <p className="italic text-sm opacity-60">"You saved the equivalent of driving 8km less today."</p>
           <div className="w-16 h-px mx-auto" style={{ background: "#F5F0E840" }} />
 
@@ -209,10 +217,10 @@ export default function CustomerMenu() {
             <p className="text-xs text-muted-foreground">The Green Table</p>
           </div>
           <div className="flex items-center gap-2">
-            {tableId && (
+            {tableLabel && (
               <div className="flex items-center gap-1 bg-accent/10 text-accent text-xs font-semibold px-2.5 py-1 rounded-full border border-accent/20">
                 <QrCode size={11} />
-                {tableId}
+                {tableLabel}
               </div>
             )}
             <div className="flex items-center gap-1.5 text-accent">
@@ -362,8 +370,8 @@ export default function CustomerMenu() {
                 <span className="text-sm">🌿 Sync with my arrival (Pre-order)</span>
               </label>
 
-              <button className="btn-primary w-full py-3 text-base" onClick={placeOrder}>
-                Place Order
+              <button className="btn-primary w-full py-3 text-base disabled:opacity-50 disabled:cursor-not-allowed" onClick={placeOrder} disabled={!canPlaceOrder}>
+                {canPlaceOrder ? "Place Order" : "Scan QR to Order"}
               </button>
             </div>
             <style>{`@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
