@@ -12,6 +12,7 @@ const adminNavItems = [
   { label: "Suppliers",  icon: Truck,          to: "/admin?view=suppliers" },
   { label: "Floor Map",  icon: Map,            to: "/floor" },
   { label: "Kitchen",    icon: ChefHat,        to: "/kitchen" },
+  { label: "Menu",       icon: ChefHat,        to: "/admin?view=menu" },
   { label: "Inventory",  icon: Package,        to: "/admin?view=inventory" },
   { label: "Waste Log",  icon: Recycle,        to: "/waste" },
   { label: "Analytics",  icon: BarChart3,      to: "/admin?view=analytics" },

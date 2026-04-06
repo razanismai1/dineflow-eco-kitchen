@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   LayoutDashboard, Map, ChefHat, Package, Recycle, BarChart3, Settings,
-  TrendingUp, Leaf, Truck, Plus, Check, X, ChevronRight, ChevronDown, Save, AlertTriangle, AlertCircle, Edit2, ShoppingCart
+  TrendingUp, Leaf, Truck, Plus, Check, X, ChevronRight, ChevronDown, Save, AlertTriangle, AlertCircle, Edit2, ShoppingCart, Trash2
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
 import { useDashboardAnalytics, useSalesVsWasteChart } from "@/hooks/useAnalytics";
 import { useSuppliers, useInventoryItems } from "@/hooks/useInventory";
-import { useCategories } from "@/hooks/useMenu";
+import { useCategories, useMenuItems } from "@/hooks/useMenu";
 import { floorApi } from "@/api/floor";
 import { menuApi } from "@/api/menu";
 import { inventoryApi } from "@/api/inventory";
@@ -159,6 +159,7 @@ export default function AdminDashboard() {
   const { data: suppliersApi } = useSuppliers();
   const { data: inventoryApi } = useInventoryItems();
   const { data: menuCategoriesApi = [] } = useCategories();
+  const { data: menuItemsApi = [] } = useMenuItems();
 
   const statsData = analyticsData || { revenueRecovered: 0, co2Saved: 0, inventoryEfficiency: 0, treesEquivalent: 0 };
   const chartData = chartDataApi || [];
@@ -204,6 +205,18 @@ export default function AdminDashboard() {
     d.setDate(d.getDate() + 7);
     return d.toISOString().slice(0, 10);
   });
+
+  // Menu registry modal state
+  const [isMenuItemModalOpen, setIsMenuItemModalOpen] = useState(false);
+  const [editingMenuItemId, setEditingMenuItemId] = useState<number | null>(null);
+  const [menuItemName, setMenuItemName] = useState("");
+  const [menuItemDescription, setMenuItemDescription] = useState("");
+  const [menuItemCategoryId, setMenuItemCategoryId] = useState<number | "">("");
+  const [menuItemNewCategory, setMenuItemNewCategory] = useState("");
+  const [menuItemBasePrice, setMenuItemBasePrice] = useState<number | string>("");
+  const [menuItemDiscountPrice, setMenuItemDiscountPrice] = useState<number | string>("");
+  const [menuItemEcoScore, setMenuItemEcoScore] = useState<number | string>(5);
+  const [menuItemIsVegan, setMenuItemIsVegan] = useState(false);
 
   // Inventory State
   const [inventoryList, setInventoryList] = useState<InventoryUi[]>(initialInventory);
@@ -505,6 +518,165 @@ export default function AdminDashboard() {
     } catch (error: any) {
       toast.error(error?.message || "Failed to create preparation item");
     }
+  };
+
+  const openMenuItemModal = (item?: any) => {
+    if (item) {
+      setEditingMenuItemId(Number(item.id));
+      setMenuItemName(item.name || "");
+      setMenuItemDescription(item.description || "");
+      setMenuItemCategoryId(Number(item.category) || "");
+      setMenuItemNewCategory("");
+      setMenuItemBasePrice(String(Number(item.base_price ?? item.price ?? 0)));
+      setMenuItemDiscountPrice(item.discount_price != null ? String(Number(item.discount_price)) : "");
+      setMenuItemEcoScore(String(Number(item.eco_score ?? 5)));
+      setMenuItemIsVegan(!!item.is_vegan);
+    } else {
+      setEditingMenuItemId(null);
+      setMenuItemName("");
+      setMenuItemDescription("");
+      setMenuItemCategoryId("");
+      setMenuItemNewCategory("");
+      setMenuItemBasePrice("");
+      setMenuItemDiscountPrice("");
+      setMenuItemEcoScore(5);
+      setMenuItemIsVegan(false);
+    }
+    setIsMenuItemModalOpen(true);
+  };
+
+  const handleSaveMenuItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      let categoryId = Number(menuItemCategoryId);
+      if (menuItemNewCategory.trim()) {
+        const createdCategory = await menuApi.createCategory({ name: menuItemNewCategory.trim() });
+        categoryId = Number(createdCategory.id);
+      }
+
+      if (!categoryId) {
+        toast.error("Please select or create a category");
+        return;
+      }
+
+      const payload = {
+        name: menuItemName.trim(),
+        description: menuItemDescription.trim(),
+        category: categoryId,
+        base_price: Number(menuItemBasePrice),
+        discount_price: menuItemDiscountPrice === "" ? null : Number(menuItemDiscountPrice),
+        eco_score: Number(menuItemEcoScore) || 5,
+        is_vegan: menuItemIsVegan,
+      };
+
+      if (editingMenuItemId) {
+        await menuApi.updateItem(editingMenuItemId, payload);
+        toast.success("Menu item updated");
+      } else {
+        await menuApi.createItem(payload);
+        toast.success("Menu item created");
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["menu", "categories"] });
+      await queryClient.invalidateQueries({ queryKey: ["menu", "items"] });
+      setIsMenuItemModalOpen(false);
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to save menu item");
+    }
+  };
+
+  const handleDeleteMenuItem = async (itemId: number, itemName: string) => {
+    try {
+      await menuApi.deleteItem(itemId);
+      await queryClient.invalidateQueries({ queryKey: ["menu", "items"] });
+      toast.success(`${itemName} removed from menu`);
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to delete menu item");
+    }
+  };
+
+  const renderMenuRegistry = () => {
+    const menuItems = Array.isArray(menuItemsApi) ? menuItemsApi : [];
+
+    return (
+      <div className="space-y-8 animate-in fade-in duration-300">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="font-display text-2xl">Menu Registry</h1>
+            <p className="text-sm text-muted-foreground">Add, edit, and remove dishes from your live menu</p>
+          </div>
+          <button onClick={() => openMenuItemModal()} className="btn-primary flex items-center gap-2">
+            <Plus size={16} /> Add Menu Item
+          </button>
+        </div>
+
+        <div className="card-dineflow overflow-hidden">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b border-border text-left text-muted-foreground bg-muted/20">
+                <th className="px-6 py-4 font-medium">Dish</th>
+                <th className="px-6 py-4 font-medium">Category</th>
+                <th className="px-6 py-4 font-medium">Price</th>
+                <th className="px-6 py-4 font-medium">Eco</th>
+                <th className="px-6 py-4 font-medium">Type</th>
+                <th className="px-6 py-4 font-medium">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {menuItems.map((item: any) => {
+                const basePrice = Number(item.base_price ?? item.price ?? 0);
+                const discountPrice = item.discount_price != null ? Number(item.discount_price) : null;
+
+                return (
+                  <tr key={item.id} className="border-b border-border hover:bg-muted/10 transition-colors">
+                    <td className="px-6 py-4">
+                      <p className="font-medium">{item.name}</p>
+                      <p className="text-xs text-muted-foreground truncate max-w-[360px]">{item.description || "No description"}</p>
+                    </td>
+                    <td className="px-6 py-4 text-muted-foreground">{item.category_name || `#${item.category}`}</td>
+                    <td className="px-6 py-4">
+                      <span className="font-semibold">₹{basePrice}</span>
+                      {discountPrice != null && (
+                        <span className="text-xs text-muted-foreground ml-2">Flash ₹{discountPrice}</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-muted-foreground">{Number(item.eco_score ?? 0)}/10</td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider ${item.is_vegan ? "bg-mint/15 text-mint" : "bg-amber/15 text-amber"}`}>
+                        {item.is_vegan ? "Veg" : "Non-Veg"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 flex items-center gap-2">
+                      <button
+                        onClick={() => openMenuItemModal(item)}
+                        className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                        title="Edit Menu Item"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteMenuItem(Number(item.id), item.name || "Item")}
+                        className="p-1.5 text-coral hover:text-coral hover:bg-coral/10 rounded-md transition-colors"
+                        title="Delete Menu Item"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {menuItems.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
+                    No menu items found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   };
 
   const renderDashboard = () => (
@@ -1000,10 +1172,11 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-background p-8 pb-16">
       <div className="max-w-6xl mx-auto">
         {currentView === "dashboard" && renderDashboard()}
+        {currentView === "menu" && renderMenuRegistry()}
         {currentView === "suppliers" && renderSuppliers()}
         {currentView === "settings" && renderSettings()}
         {currentView === "inventory" && renderInventory()}
-        {currentView !== "dashboard" && currentView !== "suppliers" && currentView !== "settings" && currentView !== "inventory" && (
+        {currentView !== "dashboard" && currentView !== "menu" && currentView !== "suppliers" && currentView !== "settings" && currentView !== "inventory" && (
           <div className="flex items-center justify-center h-64 text-muted-foreground">
             Module under construction
           </div>
@@ -1122,6 +1295,130 @@ export default function AdminDashboard() {
                   Cancel
                 </button>
                 <button type="submit" className="flex-1 btn-primary py-2 text-sm">Create Dish</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Menu Registry Modal */}
+      {isMenuItemModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-card w-full max-w-lg rounded-xl border border-border shadow-lg p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-display text-xl">{editingMenuItemId ? "Edit Menu Item" : "Add Menu Item"}</h2>
+              <button onClick={() => setIsMenuItemModalOpen(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleSaveMenuItem} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Dish Name</label>
+                <input
+                  required
+                  type="text"
+                  value={menuItemName}
+                  onChange={(e) => setMenuItemName(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Description</label>
+                <textarea
+                  value={menuItemDescription}
+                  onChange={(e) => setMenuItemDescription(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all"
+                  rows={3}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Category</label>
+                  <select
+                    value={menuItemCategoryId}
+                    onChange={(e) => setMenuItemCategoryId(e.target.value ? Number(e.target.value) : "")}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all"
+                  >
+                    <option value="">Select category</option>
+                    {Array.isArray(menuCategoriesApi) && menuCategoriesApi.map((cat: any) => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">New Category (optional)</label>
+                  <input
+                    type="text"
+                    value={menuItemNewCategory}
+                    onChange={(e) => setMenuItemNewCategory(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all"
+                    placeholder="Create new category"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Base Price</label>
+                  <input
+                    required
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={menuItemBasePrice}
+                    onChange={(e) => setMenuItemBasePrice(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Discount Price</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={menuItemDiscountPrice}
+                    onChange={(e) => setMenuItemDiscountPrice(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all"
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Eco Score</label>
+                  <input
+                    required
+                    type="number"
+                    min="0"
+                    max="10"
+                    value={menuItemEcoScore}
+                    onChange={(e) => setMenuItemEcoScore(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  id="menu-item-vegan"
+                  type="checkbox"
+                  checked={menuItemIsVegan}
+                  onChange={(e) => setMenuItemIsVegan(e.target.checked)}
+                />
+                <label htmlFor="menu-item-vegan" className="text-sm">Vegan</label>
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsMenuItemModalOpen(false)}
+                  className="flex-1 px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 btn-primary py-2 text-sm">
+                  {editingMenuItemId ? "Save Changes" : "Create Item"}
+                </button>
               </div>
             </form>
           </div>

@@ -370,7 +370,10 @@ export default function CustomerMenu() {
                 <span className="text-sm">🌿 Sync with my arrival (Pre-order)</span>
               </label>
 
-              <button className="btn-primary w-full py-3 text-base disabled:opacity-50 disabled:cursor-not-allowed" onClick={placeOrder} disabled={!canPlaceOrder}>
+              <button
+                className={`w-full py-3 text-base ${canPlaceOrder ? "btn-primary" : "rounded-xl bg-muted text-muted-foreground hover:bg-muted/90"}`}
+                onClick={placeOrder}
+              >
                 {canPlaceOrder ? "Place Order" : "Scan QR to Order"}
               </button>
             </div>
