@@ -245,7 +245,14 @@ export default function KitchenPanel() {
           <div>
             <p className="text-[11px] text-mint font-medium">Done Today</p>
             <p className="font-bold text-mint text-lg leading-none">
-              {orderItems.filter((i) => i.status === "done").length}
+              {orderItems.filter((i) => {
+                if (i.status !== "done") return false;
+                const d = new Date(i.createdAt);
+                const today = new Date();
+                return d.getDate() === today.getDate() &&
+                       d.getMonth() === today.getMonth() &&
+                       d.getFullYear() === today.getFullYear();
+              }).length}
             </p>
           </div>
         </div>

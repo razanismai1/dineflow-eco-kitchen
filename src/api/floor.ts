@@ -13,6 +13,10 @@ export const floorApi = {
     const { data } = await apiClient.patch(`/floor/tables/${id}/update_status/`, { status });
     return data;
   },
+  updateTable: async (id: number | string, payload: any) => {
+    const { data } = await apiClient.patch(`/floor/tables/${id}/`, payload);
+    return data;
+  },
   getAlerts: async () => {
     const { data } = await apiClient.get('/floor/alerts/');
     return data;

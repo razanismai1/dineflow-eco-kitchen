@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Plus, Minus, Users, AlertCircle, X, LogOut, ShoppingBag, ChevronDown } from "lucide-react";
+import { Plus, Minus, Users, AlertCircle, X, LogOut, ShoppingBag, ChevronDown, Printer } from "lucide-react";
 import { useApp, type TableData } from "@/contexts/AppContext";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { useAlerts, useCreateTable, useDismissAlert, useTables, useUpdateTableStatus } from "@/hooks/useFloor";
+import { useAlerts, useCreateTable, useDismissAlert, useTables, useUpdateTableStatus, useUpdateTable } from "@/hooks/useFloor";
 import { useCategories, useMenuItems } from "@/hooks/useMenu";
 import { useCreateOrder } from "@/hooks/useOrders";
 
@@ -229,12 +229,17 @@ export default function FloorMap() {
   const [tableName, setTableName] = useState("");
   const [tableCapacity, setTableCapacity] = useState<number | string>(4);
   const [tableStatus, setTableStatus] = useState("available");
+  const [tableShape, setTableShape] = useState("square");
+  const [tableSection, setTableSection] = useState("Indoor");
+  const [editMode, setEditMode] = useState(false);
+  const [activeTab, setActiveTab] = useState("Indoor");
 
   const { data: rawTables = [] } = useTables();
   const { data: rawAlerts = [] } = useAlerts();
   const { mutate: createTable } = useCreateTable();
   const { mutate: dismissAlertApi } = useDismissAlert();
   const { mutate: updateTableStatus } = useUpdateTableStatus();
+  const { mutate: updateTableLayout } = useUpdateTable();
   const { mutate: createOrder } = useCreateOrder();
   const { data: rawCategories = [] } = useCategories();
   const { data: rawMenuItems = [] } = useMenuItems();
@@ -290,6 +295,10 @@ export default function FloorMap() {
       status: table.status === 'pre-order' ? 'preorder' : table.status,
       timeSeated: table.time_seated ? Math.max(0, Math.floor((Date.now() - new Date(table.time_seated).getTime()) / 60000)) : undefined,
       reservationTime: undefined,
+      pos_x: table.pos_x ?? 100,
+      pos_y: table.pos_y ?? 100,
+      shape: table.shape || "square",
+      section: table.section || "Indoor",
     }));
     setTablesState(mapped);
   }, [rawTables, setTablesState]);
@@ -334,6 +343,45 @@ export default function FloorMap() {
     );
   };
 
+  const handlePointerDown = (e: React.PointerEvent, ta: TableData) => {
+    if (!editMode) return;
+    e.preventDefault();
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    
+    let isDragging = false;
+    const rect = el.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+    
+    const parentRect = el.parentElement!.getBoundingClientRect();
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      isDragging = true;
+      const newX = moveEvent.clientX - parentRect.left - offsetX;
+      const newY = moveEvent.clientY - parentRect.top - offsetY;
+      
+      setTablesState(prev => prev.map(t => 
+        t.id === ta.id ? { ...t, pos_x: newX, pos_y: newY } : t
+      ));
+    };
+
+    const onPointerUp = (upEvent: PointerEvent) => {
+      el.releasePointerCapture(e.pointerId);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      
+      if (isDragging && ta.pk) {
+        const newX = upEvent.clientX - parentRect.left - offsetX;
+        const newY = upEvent.clientY - parentRect.top - offsetY;
+        updateTableLayout({ id: ta.pk, payload: { pos_x: Math.max(0, newX), pos_y: Math.max(0, newY) } });
+      }
+    };
+    
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  };
+
   const handleAddTable = (e: FormEvent) => {
     e.preventDefault();
     createTable(
@@ -341,6 +389,8 @@ export default function FloorMap() {
         name: tableName.trim(),
         capacity: Number(tableCapacity),
         status: tableStatus,
+        shape: tableShape,
+        section: tableSection,
       },
       {
         onSuccess: () => {
@@ -401,38 +451,120 @@ export default function FloorMap() {
         </div>
       </header>
 
-      <div className="flex gap-6 p-6">
-        {/* Table Grid */}
-        <div className="w-[70%]">
-          <div className="grid grid-cols-5 gap-3">
-            {tablesState.map((table) => {
-              const cfg = statusConfig[table.status];
+      {/* Tabs Header */}
+      <div className="px-6 pt-4 pb-0 bg-[#F3F4F6] flex items-center border-b border-[#E5E7EB]">
+        <div className="flex bg-white rounded-t-xl overflow-hidden border border-[#E5E7EB] border-b-0 shadow-sm">
+          {["Indoor", "Outdoor", "Private Room"].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-6 py-2 text-sm font-semibold transition-colors ${
+                activeTab === tab
+                  ? "text-foreground bg-white"
+                  : "text-muted-foreground bg-[#F9FAFB] hover:bg-white"
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-0 h-[calc(100vh-140px)] bg-[#F3F4F6]">
+        {/* Canvas Area */}
+        <div className="flex-1 relative overflow-hidden border-r border-[#E5E7EB]">
+          {tablesState.filter(t => (t.section || "Indoor") === activeTab).map((table) => {
+            const isOccupied = table.status === "occupied" || table.status === "preorder";
+            const bgClass = isOccupied ? "bg-[#EEF9F5]" : "bg-white";
+            const baseClasses = `absolute flex flex-col items-center justify-center transition-transform select-none ${editMode ? "cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-accent" : "cursor-pointer"} ${bgClass}`;
+            const commonStyle = { left: table.pos_x ?? 100, top: table.pos_y ?? 100 };
+
+            const InnerContent = () => (
+              <>
+                {!editMode && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      markAvailable(table.id);
+                      toast.info(`Printing bill for ${table.id}...`);
+                    }}
+                    className="absolute top-1 right-1 p-1 rounded-full bg-white/80 hover:bg-accent hover:text-accent-foreground border border-border transition-all shadow-sm z-10"
+                    title="Print Bill & Close"
+                  >
+                    <Printer size={10} />
+                  </button>
+                )}
+                <span className="text-[11px] font-medium text-foreground">{table.id}</span>
+                <div className="my-1.5 flex justify-center items-center">
+                  {isOccupied ? (
+                    <div className="w-6 h-6 rounded-full bg-[#1B875B] text-white flex items-center justify-center shadow-sm">
+                      <span className="text-[10px]">🍽</span>
+                    </div>
+                  ) : (
+                    <div className="bg-[#E5E7EB] px-1.5 py-0.5 rounded text-[9px] font-mono text-muted-foreground flex items-center shadow-sm">
+                      {table.reservationTime || "Available"}
+                    </div>
+                  )}
+                </div>
+                <span className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
+                  <Users size={10} /> {isOccupied ? Math.min(table.capacity, 2) : 0}/{table.capacity}
+                </span>
+              </>
+            );
+
+            if (table.shape === "circle") {
               return (
-                <button key={table.id} onClick={() => setSelectedTable(table)}
-                  className={`${cfg.bg} rounded-xl p-3 text-center hover:-translate-y-0.5 hover:shadow-md transition-all duration-150 relative ${table.status === "preorder" ? "animate-pulse-ring" : ""}`}>
-                  <p className="font-mono font-bold text-sm">{table.id}</p>
-                  <p className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
-                    <Users size={12} /> {table.capacity}
-                  </p>
-                  <p className="text-xs font-medium mt-1">{cfg.label(table)}</p>
-                  {table.guestName && <p className="text-xs text-muted-foreground truncate">{table.guestName}</p>}
-                </button>
+                <div key={table.id} onPointerDown={(e) => handlePointerDown(e, table)} onClick={() => !editMode && setSelectedTable(table)} className={`${baseClasses} rounded-full w-24 h-24 shadow-sm`} style={commonStyle}>
+                  <InnerContent />
+                </div>
               );
-            })}
-          </div>
-          {/* Legend */}
-          <div className="flex gap-4 mt-4 justify-center">
-            {legendItems.map((l) => (
-              <div key={l.label} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: l.color }} />
-                {l.label}
+            }
+            if (table.shape === "diamond") {
+              return (
+                <div key={table.id} onPointerDown={(e) => handlePointerDown(e, table)} onClick={() => !editMode && setSelectedTable(table)} className={`${baseClasses} w-24 h-24 rotate-45 transform-gpu shadow-sm`} style={commonStyle}>
+                  <div className="-rotate-45 flex flex-col items-center justify-center w-full h-full">
+                    <InnerContent />
+                  </div>
+                </div>
+              );
+            }
+            if (table.shape === "rectangle") {
+              return (
+                <div key={table.id} onPointerDown={(e) => handlePointerDown(e, table)} onClick={() => !editMode && setSelectedTable(table)} className={`${baseClasses} w-40 h-16 rounded shadow-sm`} style={commonStyle}>
+                  <InnerContent />
+                </div>
+              );
+            }
+            return (
+              <div key={table.id} onPointerDown={(e) => handlePointerDown(e, table)} onClick={() => !editMode && setSelectedTable(table)} className={`${baseClasses} w-20 h-24 rounded shadow-sm`} style={commonStyle}>
+                <InnerContent />
               </div>
-            ))}
+            );
+          })}
+
+          {/* Floating Action Button & Edit Mode */}
+          <div className="absolute bottom-6 right-6 flex flex-col items-end gap-3">
+            <button
+              onClick={() => setEditMode(!editMode)}
+              className={`px-4 py-2 rounded-full font-semibold text-sm shadow opacity-90 transition-all ${
+                editMode ? "bg-accent text-accent-foreground ring-2 ring-offset-2 ring-accent" : "bg-white text-foreground border border-border"
+              }`}
+            >
+              {editMode ? "Done Editing" : "Edit Layout"}
+            </button>
+            {userRole === "admin" && (
+              <button
+                onClick={() => setShowAddTableModal(true)}
+                className="w-14 h-14 bg-[#2563EB] text-white rounded-full shadow-lg flex items-center justify-center hover:bg-[#1D4ED8] transition-colors"
+              >
+                <Plus size={24} />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Notifications */}
-        <div className="w-[30%] space-y-4">
+        {/* Notifications Sidebar */}
+        <div className="w-[30%] min-w-[320px] max-w-[400px] border-l border-[#E5E7EB] bg-white p-6 overflow-y-auto">
           <div className="flex items-center gap-2">
             <h2 className="font-display text-lg">Live Alerts</h2>
             <span className="badge-pill bg-mint/15 text-mint text-[10px]">
@@ -614,6 +746,31 @@ export default function FloorMap() {
                     <option value="cleaning">Cleaning</option>
                     <option value="occupied">Occupied</option>
                     <option value="pre-order">Pre-order</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Shape</label>
+                  <select
+                    value={tableShape}
+                    onChange={(e) => setTableShape(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+                  >
+                    <option value="square">Square</option>
+                    <option value="rectangle">Rectangle</option>
+                    <option value="circle">Circle</option>
+                    <option value="diamond">Diamond</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Section</label>
+                  <select
+                    value={tableSection}
+                    onChange={(e) => setTableSection(e.target.value)}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent"
+                  >
+                    <option value="Indoor">Indoor</option>
+                    <option value="Outdoor">Outdoor</option>
+                    <option value="Private Room">Private Room</option>
                   </select>
                 </div>
               </div>

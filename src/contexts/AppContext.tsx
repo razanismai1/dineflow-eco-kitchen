@@ -16,6 +16,10 @@ export interface TableData {
   eta?: number;
   distanceMeters?: number;
   preOrderItems?: string[];
+  pos_x?: number;
+  pos_y?: number;
+  shape?: "circle" | "square" | "rectangle" | "diamond";
+  section?: "Indoor" | "Outdoor" | "Private Room";
 }
 
 

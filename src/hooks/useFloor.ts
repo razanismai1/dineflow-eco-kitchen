@@ -12,7 +12,7 @@ export function useTables() {
 export function useCreateTable() {
   const queryClient = useQueryClient();
 
-  return useMutation<any, NormalizedError, { name: string; capacity: number; status?: string }>({
+  return useMutation<any, NormalizedError, { name: string; capacity: number; status?: string; shape?: string; section?: string }>({
     mutationFn: (payload) => floorApi.createTable(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['floor', 'tables'] });
@@ -32,6 +32,33 @@ export function useUpdateTableStatus() {
       queryClient.setQueryData(['floor', 'tables'], (old: any) => {
         if (!Array.isArray(old)) return old;
         return old.map(t => t.id === id ? { ...t, status } : t);
+      });
+
+      return { previousTables };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousTables) {
+        queryClient.setQueryData(['floor', 'tables'], context.previousTables);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['floor', 'tables'] });
+    },
+  });
+}
+
+export function useUpdateTable() {
+  const queryClient = useQueryClient();
+
+  return useMutation<any, NormalizedError, { id: number | string; payload: any }, { previousTables: any }>({
+    mutationFn: ({ id, payload }) => floorApi.updateTable(id, payload),
+    onMutate: async ({ id, payload }) => {
+      await queryClient.cancelQueries({ queryKey: ['floor', 'tables'] });
+      const previousTables = queryClient.getQueryData(['floor', 'tables']);
+
+      queryClient.setQueryData(['floor', 'tables'], (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.map(t => t.id === id ? { ...t, ...payload } : t);
       });
 
       return { previousTables };
