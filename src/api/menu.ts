@@ -24,30 +24,18 @@ export const menuApi = {
     const { data } = await apiClient.get('/menu/flash-sales/');
     return data;
   },
-  createItem: async (payload: {
-    name: string;
-    description?: string;
-    category: number;
-    base_price: number;
-    discount_price?: number | null;
-    eco_score?: number;
-    image_url?: string;
-    is_vegan?: boolean;
-  }) => {
-    const { data } = await apiClient.post('/menu/items/', payload);
+  createItem: async (payload: any) => {
+    const isFormData = payload instanceof FormData;
+    const { data } = await apiClient.post('/menu/items/', payload, {
+      headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : undefined
+    });
     return data;
   },
-  updateItem: async (id: number, payload: {
-    name?: string;
-    description?: string;
-    category?: number;
-    base_price?: number;
-    discount_price?: number | null;
-    eco_score?: number;
-    image_url?: string;
-    is_vegan?: boolean;
-  }) => {
-    const { data } = await apiClient.patch(`/menu/items/${id}/`, payload);
+  updateItem: async (id: number, payload: any) => {
+    const isFormData = payload instanceof FormData;
+    const { data } = await apiClient.patch(`/menu/items/${id}/`, payload, {
+      headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : undefined
+    });
     return data;
   },
   deleteItem: async (id: number) => {

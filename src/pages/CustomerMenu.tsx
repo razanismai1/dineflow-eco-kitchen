@@ -71,6 +71,7 @@ export default function CustomerMenu() {
         ecoScore: Number(item.eco_score ?? 0),
         price: Number(item.price ?? item.base_price ?? 0),
         categoryId: item.category,
+        image: item.image || item.image_url || null,
       }))
     : [];
 
@@ -288,9 +289,15 @@ export default function CustomerMenu() {
               <div className="space-y-3">
                 {cat.items.map((item) => (
                   <div key={item.id} className="card-dineflow p-3 flex gap-3">
-                    <div className="w-[60px] h-[60px] rounded-lg bg-muted flex items-center justify-center shrink-0 text-xl">
-                      {item.veg ? "🥬" : "🍗"}
-                    </div>
+                    {item.image ? (
+                      <div className="w-[60px] h-[60px] rounded-lg shrink-0 overflow-hidden bg-muted border border-border/50">
+                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-[60px] h-[60px] rounded-lg bg-muted flex items-center justify-center shrink-0 text-xl border border-border/50">
+                        {item.veg ? "🥬" : "🍗"}
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between">
                         <p className="font-medium text-sm">{item.name}</p>
