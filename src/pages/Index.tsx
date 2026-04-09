@@ -1,53 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { LayoutDashboard, ChefHat, Map, UtensilsCrossed, ArrowRight, Package, Leaf } from "lucide-react";
-import { useApp, UserRole } from "@/contexts/AppContext";
-
-const views = [
-  {
-    role: "admin",
-    label: "Admin",
-    sublabel: "Dashboard",
-    desc: "Strategy, KPIs, inventory & supplier management",
-    icon: LayoutDashboard,
-    glow: "hover:shadow-[0_8px_32px_-4px_hsl(153,42%,30%,0.35)]",
-    iconBg: "bg-accent/10",
-    iconColor: "text-accent",
-    border: "hover:border-accent/40",
-  },
-  {
-    role: "chef",
-    label: "Kitchen",
-    sublabel: "Panel",
-    desc: "AI prep sheets, live orders & flash sales",
-    icon: ChefHat,
-    glow: "hover:shadow-[0_8px_32px_-4px_hsl(14,76%,61%,0.35)]",
-    iconBg: "bg-coral/10",
-    iconColor: "text-coral",
-    border: "hover:border-coral/40",
-  },
-  {
-    role: "waiter",
-    label: "Floor",
-    sublabel: "Map",
-    desc: "Real-time table status & live alerts for staff",
-    icon: Map,
-    glow: "hover:shadow-[0_8px_32px_-4px_hsl(27,88%,67%,0.35)]",
-    iconBg: "bg-amber/10",
-    iconColor: "text-amber",
-    border: "hover:border-amber/40",
-  },
-  {
-    role: "customer",
-    label: "Customer",
-    sublabel: "Menu",
-    desc: "Mobile ordering with eco impact tracking",
-    icon: UtensilsCrossed,
-    glow: "hover:shadow-[0_8px_32px_-4px_hsl(147,38%,62%,0.35)]",
-    iconBg: "bg-mint/10",
-    iconColor: "text-mint",
-    border: "hover:border-mint/40",
-  },
-] as const;
+import { ChefHat, UtensilsCrossed, ArrowRight, Package, Leaf } from "lucide-react";
 
 const pipeline = [
   { icon: Package, label: "Procurement" },
@@ -58,15 +10,6 @@ const pipeline = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
-
-  const handleRoleSelect = (role: UserRole) => {
-    switch (role) {
-      case "admin": navigate("/admin"); break;
-      case "chef": navigate("/kitchen"); break;
-      case "waiter": navigate("/floor"); break;
-      case "customer": navigate("/menu"); break;
-    }
-  };
 
   return (
     <div className="relative min-h-screen bg-background flex flex-col items-center justify-center p-8 overflow-hidden">
@@ -119,7 +62,7 @@ export default function LandingPage() {
           🌿 Powering zero-waste dining
         </div>
 
-        <div className="flex items-center justify-center gap-3 pt-1">
+        <div className="flex items-center justify-center pt-1 mb-10">
           <button
             onClick={() => navigate("/login")}
             className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold text-accent-foreground transition-all hover:opacity-90"
@@ -127,31 +70,7 @@ export default function LandingPage() {
           >
             Sign In <ArrowRight size={15} />
           </button>
-          <span className="text-muted-foreground text-sm">or select your module below</span>
         </div>
-      </div>
-
-      {/* Role cards grid */}
-      <div className="relative grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-2xl w-full mb-10">
-        {views.map(({ role, label, sublabel, desc, icon: Icon, glow, iconBg, iconColor, border }) => (
-          <button
-            key={role}
-            onClick={() => handleRoleSelect(role as UserRole)}
-            className={`card-dineflow text-left p-6 group border border-border transition-all duration-200 hover:-translate-y-1 ${glow} ${border}`}
-          >
-            <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-4 transition-transform duration-200 group-hover:scale-110 ${iconBg}`}>
-              <Icon size={22} className={iconColor} />
-            </div>
-            <div className="flex items-baseline gap-1.5 mb-1">
-              <h2 className="font-display text-xl text-foreground">{label}</h2>
-              <span className="text-sm text-muted-foreground font-normal">{sublabel}</span>
-            </div>
-            <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
-            <div className={`flex items-center gap-1 mt-4 text-xs font-medium transition-all duration-200 opacity-0 group-hover:opacity-100 ${iconColor}`}>
-              Enter <ArrowRight size={13} className="transition-transform duration-200 group-hover:translate-x-0.5" />
-            </div>
-          </button>
-        ))}
       </div>
 
       {/* How it works pipeline */}

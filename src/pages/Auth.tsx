@@ -87,7 +87,7 @@ export default function Auth() {
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [selectedRole, setSelectedRole] = useState<RoleId>("admin");
@@ -97,7 +97,7 @@ export default function Auth() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!email || !password) { setError("Please fill in all fields."); return; }
+    if (!username || !password) { setError("Please fill in all fields."); return; }
     if (mode === "signup" && !name) { setError("Please enter your name."); return; }
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
 
@@ -105,7 +105,7 @@ export default function Auth() {
     try {
       if (mode === "login") {
          setUserRole(null);
-         const loginData = await loginApi({ email, password });
+         const loginData = await loginApi({ username, password });
          let fetchedRole = loginData?.role?.toLowerCase();
 
          if (!fetchedRole) {
@@ -130,10 +130,9 @@ export default function Auth() {
          navigate(nextRoute, { replace: true });
       } else {
         await registerApi({
-          email,
+          username,
           password,
           name,
-          username: name,
           role: selectedRole,
         });
          toast.success("Account created successfully! Please log in.");
@@ -279,14 +278,14 @@ export default function Auth() {
                 </div>
               )}
 
-              {/* Email */}
+              {/* Username */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Email</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Username</label>
                 <div className="relative">
-                  <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input
-                    type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@restaurant.com"
+                    type="text" value={username} onChange={(e) => setUsername(e.target.value)}
+                    placeholder="restaurant_user"
                     className="w-full bg-background border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 transition-all"
                   />
                 </div>
@@ -310,31 +309,7 @@ export default function Auth() {
                 </div>
               </div>
 
-              {/* Role selector */}
-              {mode === "signup" && (
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your Role</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {roles.map((role) => {
-                      const isActive = selectedRole === role.id;
-                      return (
-                        <button key={role.id} type="button" onClick={() => setSelectedRole(role.id)}
-                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition-all ${
-                            isActive
-                              ? `${role.activeBg} border-transparent shadow-sm`
-                              : `${role.bg} hover:border-opacity-60`
-                          }`}>
-                          <role.icon size={15} className={isActive ? "opacity-90" : `text-${role.color}`} />
-                          <div className="min-w-0">
-                            <p className={`text-xs font-semibold truncate ${isActive ? "" : "text-foreground"}`}>{role.label}</p>
-                            <p className={`text-[10px] truncate ${isActive ? "opacity-70" : "text-muted-foreground"}`}>{role.sub}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+
 
               {/* Error */}
               {error && (
@@ -382,7 +357,7 @@ export default function Auth() {
 
           {/* Quick demo note */}
           <p className="text-center text-xs text-muted-foreground mt-4">
-            Demo: any email &amp; password (6+ chars) — role routes you to the right module
+            Demo: any username &amp; password (6+ chars) — role routes you to the right module
           </p>
         </div>
       </div>

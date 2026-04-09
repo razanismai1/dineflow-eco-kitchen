@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   LayoutDashboard, Map, ChefHat, Package, Recycle, BarChart3, Settings,
-  TrendingUp, Leaf, Truck, Plus, Check, X, ChevronRight, ChevronDown, Save, AlertTriangle, AlertCircle, Edit2, ShoppingCart, Trash2
+  TrendingUp, Leaf, Truck, Plus, Check, X, ChevronRight, ChevronDown, Save, AlertTriangle, AlertCircle, Edit2, ShoppingCart, Trash2, Users
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -16,6 +16,7 @@ import { useCategories, useMenuItems } from "@/hooks/useMenu";
 import { floorApi } from "@/api/floor";
 import { menuApi } from "@/api/menu";
 import { inventoryApi } from "@/api/inventory";
+import { useStaffList, useCreateStaff, useUpdateStaff, useDeleteStaff } from "@/hooks/useUsers";
 
 const CATEGORIES = [
   "Fruits and Vegetables", "Dairy", "Masala, Salt and Sugar", "Chicken and Eggs",
@@ -160,6 +161,11 @@ export default function AdminDashboard() {
   const { data: inventoryApi } = useInventoryItems();
   const { data: menuCategoriesApi = [] } = useCategories();
   const { data: menuItemsApi = [] } = useMenuItems();
+  const { data: staffListApi } = useStaffList();
+  
+  const createStaff = useCreateStaff();
+  const updateStaff = useUpdateStaff();
+  const deleteStaff = useDeleteStaff();
 
   const statsData = analyticsData || { revenueRecovered: 0, co2Saved: 0, inventoryEfficiency: 0, treesEquivalent: 0 };
   const chartData = chartDataApi || [];
@@ -174,6 +180,12 @@ export default function AdminDashboard() {
   const { setUserRole } = useApp();
   const [suppliersList, setSuppliersList] = useState<SupplierUi[]>(initialSuppliers);
   const [expandedSupplierId, setExpandedSupplierId] = useState<number | null>(null);
+
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
+  const [staffEditingId, setStaffEditingId] = useState<number | null>(null);
+  const [staffUsername, setStaffUsername] = useState("");
+  const [staffPassword, setStaffPassword] = useState("");
+  const [staffRole, setStaffRole] = useState<"chef" | "waiter">("waiter");
 
   // Add Vendor Modal State
   const [isAddVendorModalOpen, setIsAddVendorModalOpen] = useState(false);
@@ -231,6 +243,57 @@ export default function AdminDashboard() {
   }, [inventoryApi]);
 
   // Inventory Setup Modal State
+  const openStaffModal = (staff?: any) => {
+    if (staff) {
+      setStaffEditingId(staff.id);
+      setStaffUsername(staff.username);
+      setStaffPassword("");
+      setStaffRole(staff.role as any);
+    } else {
+      setStaffEditingId(null);
+      setStaffUsername("");
+      setStaffPassword("");
+      setStaffRole("waiter");
+    }
+    setIsStaffModalOpen(true);
+  };
+
+  const handleSaveStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (staffEditingId) {
+        await updateStaff.mutateAsync({
+          id: staffEditingId,
+          data: { username: staffUsername, password: staffPassword || undefined, role: staffRole }
+        });
+        toast.success("Staff member updated");
+      } else {
+        if (!staffPassword) {
+           toast.error("Password is required for new staff");
+           return;
+        }
+        await createStaff.mutateAsync({
+          username: staffUsername, password: staffPassword, role: staffRole
+        });
+        toast.success("Staff member created");
+      }
+      setIsStaffModalOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save staff member");
+    }
+  };
+
+  const handleDeleteStaff = async (id: number) => {
+    if (confirm("Are you sure you want to remove this staff member?")) {
+      try {
+        await deleteStaff.mutateAsync(id);
+        toast.success("Staff member removed");
+      } catch (err: any) {
+        toast.error("Failed to remove staff member");
+      }
+    }
+  };
+
   const [isInventoryModalOpen, setIsInventoryModalOpen] = useState(false);
   // inventory item form
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
@@ -593,6 +656,63 @@ export default function AdminDashboard() {
     } catch (error: any) {
       toast.error(error?.message || "Failed to delete menu item");
     }
+  };
+
+  const renderStaff = () => {
+    const staffMembers = Array.isArray(staffListApi) ? staffListApi.filter(u => u.role === "chef" || u.role === "waiter") : [];
+
+    return (
+      <div className="space-y-8 animate-in fade-in duration-300">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="font-display text-2xl">Staff Management</h1>
+            <p className="text-sm text-muted-foreground">Add and manage restaurant workers</p>
+          </div>
+          <button onClick={() => openStaffModal()} className="btn-primary flex items-center gap-2">
+            <Plus size={16} /> Add Worker
+          </button>
+        </div>
+
+        <div className="card-dineflow overflow-hidden">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b border-border text-left text-muted-foreground bg-muted/20">
+                <th className="px-6 py-4 font-medium">Username</th>
+                <th className="px-6 py-4 font-medium">Role</th>
+                <th className="px-6 py-4 font-medium w-32">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {staffMembers.map((user: any) => (
+                <tr key={user.id} className="border-b border-border hover:bg-muted/10 transition-colors">
+                  <td className="px-6 py-4 font-medium">{user.username}</td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider ${user.role === 'chef' ? 'bg-coral/15 text-coral' : 'bg-steel/15 text-steel'}`}>
+                      {user.role}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 flex items-center gap-2">
+                    <button onClick={() => openStaffModal(user)} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors" title="Edit">
+                      <Edit2 size={16} />
+                    </button>
+                    <button onClick={() => handleDeleteStaff(user.id)} className="p-1.5 text-coral hover:text-coral hover:bg-coral/10 rounded-md transition-colors" title="Delete">
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {staffMembers.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="px-6 py-8 text-center text-muted-foreground">
+                    No staff members found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   };
 
   const renderMenuRegistry = () => {
@@ -1175,6 +1295,7 @@ export default function AdminDashboard() {
         {currentView === "menu" && renderMenuRegistry()}
         {currentView === "suppliers" && renderSuppliers()}
         {currentView === "settings" && renderSettings()}
+        {currentView === "staff" && renderStaff()}
         {currentView === "inventory" && renderInventory()}
         {currentView !== "dashboard" && currentView !== "menu" && currentView !== "suppliers" && currentView !== "settings" && currentView !== "inventory" && (
           <div className="flex items-center justify-center h-64 text-muted-foreground">
@@ -1473,6 +1594,64 @@ export default function AdminDashboard() {
       )}
 
       {/* Inventory Setup Modal */}
+      {/* Staff Modal */}
+      {isStaffModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-card w-full max-w-md rounded-2xl shadow-xl border border-border overflow-hidden">
+            <div className="flex items-center justify-between p-5 border-b border-border bg-muted/30">
+              <h2 className="font-display text-xl">{staffEditingId ? "Edit Worker" : "Add Worker"}</h2>
+              <button onClick={() => setIsStaffModalOpen(false)} className="p-2 -mr-2 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleSaveStaff} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1.5 text-foreground/80">Username</label>
+                <input
+                  type="text"
+                  required
+                  value={staffUsername}
+                  onChange={(e) => setStaffUsername(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all"
+                  placeholder="e.g. chef_john"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1.5 text-foreground/80">Password</label>
+                <input
+                  type="password"
+                  required={!staffEditingId}
+                  value={staffPassword}
+                  onChange={(e) => setStaffPassword(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all"
+                  placeholder={staffEditingId ? "(Leave empty to keep current)" : "Create password"}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1.5 text-foreground/80">Role</label>
+                <select
+                  value={staffRole}
+                  onChange={(e) => setStaffRole(e.target.value as any)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all appearance-none"
+                >
+                  <option value="waiter">Waiter</option>
+                  <option value="chef">Chef</option>
+                </select>
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={() => setIsStaffModalOpen(false)} className="flex-1 px-4 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" disabled={createStaff.isPending || updateStaff.isPending} className="flex-1 btn-primary py-2.5 flex justify-center items-center">
+                  {(createStaff.isPending || updateStaff.isPending) ? <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" /> : "Save Worker"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {isInventoryModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-card w-full max-w-md rounded-xl border border-border shadow-lg p-6 animate-in zoom-in-95 duration-200">
