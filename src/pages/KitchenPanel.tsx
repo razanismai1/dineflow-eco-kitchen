@@ -4,7 +4,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useNavigate } from "react-router-dom";
 import { useOrders, useUpdateOrderStatus } from "@/hooks/useOrders";
 import { useInventoryItems } from "@/hooks/useInventory";
-import { useFlashSales } from "@/hooks/useMenu";
+import { useFlashSales, useMenuItems } from "@/hooks/useMenu";
 
 type KitchenOrderItem = {
   id: string;
@@ -103,11 +103,12 @@ export default function KitchenPanel() {
   const navigate = useNavigate();
   const { data: rawOrders = [] } = useOrders();
   const { data: rawInventory = [] } = useInventoryItems();
+  const { data: rawMenuItems = [] } = useMenuItems();
   const { data: rawFlashSales = [] } = useFlashSales();
   const { mutate: updateOrderStatus } = useUpdateOrderStatus();
   const [orderItems, setOrderItems] = useState<KitchenOrderItem[]>([]);
   const [localPrepItems, setLocalPrepItems] = useState<PrepItem[]>([]);
-  const [activeTab, setActiveTab] = useState<"orders" | "prep">("orders");
+  const [activeTab, setActiveTab] = useState<"orders" | "intelligence">("orders");
 
   useEffect(() => {
     if (!Array.isArray(rawOrders)) return;
@@ -133,23 +134,25 @@ export default function KitchenPanel() {
   }, [rawOrders]);
 
   useEffect(() => {
-    if (!Array.isArray(rawInventory)) return;
-    const mapped: PrepItem[] = rawInventory.map((item: any) => {
-      const quantity = Number(item.quantity ?? 0);
-      const target = Math.max(1, Math.round(quantity * 1.1));
+    if (!Array.isArray(rawMenuItems)) return;
+    const mapped: PrepItem[] = rawMenuItems.map((item: any) => {
+      // For menu items, "Target" represents the portions needed for the service.
+      // We'll use a mock logic: eco_score * 5 as target, and a slightly lower value as prepped.
+      const target = (item.eco_score ?? 5) * 4;
+      const prepped = Math.floor(target * 0.8);
       return {
         id: item.id,
         name: item.name,
-        icon: "🍽️",
+        icon: item.is_vegan ? "🥬" : "🍲",
         target,
-        usual: quantity,
-        prepped: quantity,
-        aiTag: null,
+        usual: Math.floor(target * 0.9),
+        prepped,
+        aiTag: item.eco_score >= 8 ? { type: "peak", label: "Popular AI", color: "mint" } : null,
         expiryAlert: false,
       };
     });
     setLocalPrepItems(mapped);
-  }, [rawInventory]);
+  }, [rawMenuItems]);
 
   const flashSales = Array.isArray(rawFlashSales)
     ? rawFlashSales.map((fs: any) => ({
@@ -266,221 +269,255 @@ export default function KitchenPanel() {
       </div>
 
       {/* ── Main content ── */}
-      <div className="flex gap-5 p-5 h-[calc(100vh-190px)] min-h-0">
-
-        {/* LEFT COLUMN — Orders + Prep Sheet (tabbed) */}
-        <div className="flex flex-col flex-1 min-w-0">
-          {/* Tab bar */}
-          <div className="flex gap-1 bg-muted p-1 rounded-xl mb-4 shrink-0">
-            <button
-              onClick={() => setActiveTab("orders")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === "orders"
-                  ? "bg-card shadow text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <ClipboardList size={14} />
-              Live Orders
-              {activeItems.length > 0 && (
-                <span className="ml-1 bg-coral text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                  {activeItems.length}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setActiveTab("prep")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === "prep"
-                  ? "bg-card shadow text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <CheckCircle2 size={14} />
-              Prep Sheet
-              <span className="ml-1 text-[10px] text-mint font-semibold bg-mint/10 px-1.5 py-0.5 rounded-full border border-mint/20">
-                92% AI
+      <div className="px-6 py-4 h-[calc(100vh-190px)] min-h-0 overflow-hidden">
+        
+        {/* Page Switcher Navigation */}
+        <div className="flex gap-2 mb-6 p-1 bg-muted/50 rounded-2xl w-fit border border-border/50">
+          <button
+            onClick={() => setActiveTab("orders")}
+            className={`flex items-center gap-2.5 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${
+              activeTab === "orders"
+                ? "bg-card shadow-lg text-foreground scale-[1.02] ring-1 ring-border"
+                : "text-muted-foreground hover:text-foreground hover:bg-card/50"
+            }`}
+          >
+            <ClipboardList size={18} className={activeTab === "orders" ? "text-coral" : ""} />
+            Live Orders
+            {activeItems.length > 0 && (
+              <span className="ml-1 bg-coral text-white text-[10px] px-1.5 py-0.5 rounded-full font-black animate-pulse">
+                {activeItems.length}
               </span>
-            </button>
-          </div>
-
-          {/* Tab content */}
-          <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-            {activeTab === "orders" && (
-              <>
-                {preparingItems.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-coral uppercase tracking-wider mb-2">
-                      🔥 Now Preparing ({preparingItems.length})
-                    </p>
-                    <div className="space-y-2">
-                      {preparingItems.map((item) => (
-                        <OrderCard
-                          key={item.id}
-                          item={item}
-                          onAction={() => handleUpdateItemStatus(item.id, "done")}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {newItems.length > 0 && (
-                  <div className={preparingItems.length > 0 ? "mt-4" : ""}>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                      📋 Up Next ({newItems.length})
-                    </p>
-                    <div className="space-y-2">
-                      {newItems.map((item) => (
-                        <OrderCard
-                          key={item.id}
-                          item={item}
-                          onAction={() => handleUpdateItemStatus(item.id, "preparing")}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {activeItems.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-16 text-center">
-                    <span className="text-5xl mb-3">🎉</span>
-                    <p className="font-semibold text-foreground">All caught up!</p>
-                    <p className="text-sm text-muted-foreground mt-1">No pending orders right now.</p>
-                  </div>
-                )}
-              </>
             )}
+          </button>
+          <button
+            onClick={() => setActiveTab("intelligence")}
+            className={`flex items-center gap-2.5 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${
+              activeTab === "intelligence"
+                ? "bg-card shadow-lg text-foreground scale-[1.02] ring-1 ring-border"
+                : "text-muted-foreground hover:text-foreground hover:bg-card/50"
+            }`}
+          >
+            <Zap size={18} className={activeTab === "intelligence" ? "text-accent" : ""} />
+            Kitchen Intelligence
+            <span className="ml-1 text-[10px] text-mint font-bold bg-mint/15 px-1.5 py-0.5 rounded-full border border-mint/20">
+              AI READY
+            </span>
+          </button>
+        </div>
 
-            {activeTab === "prep" && (
-              <div className="space-y-3">
+        {activeTab === "orders" ? (
+          /* ─── PAGE 1: LIVE ORDERS (FULL WIDTH) ─── */
+          <div className="grid grid-cols-2 gap-6 h-[calc(100%-80px)] overflow-hidden">
+            {/* Column: Now Preparing */}
+            <div className="flex flex-col gap-4 min-w-0 h-full">
+              <div className="flex items-center justify-between px-2">
+                <h3 className="text-xs font-bold text-coral uppercase tracking-[0.2em] flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-coral animate-ping" />
+                  Currently Preparing
+                </h3>
+                <span className="text-[10px] font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
+                   {preparingItems.length} ACTIVE
+                </span>
+              </div>
+              <div className="flex-1 overflow-y-auto pr-2 space-y-3 scrollbar-dineflow pb-10">
+                {preparingItems.map((item) => (
+                  <OrderCard
+                    key={item.id}
+                    item={item}
+                    onAction={() => handleUpdateItemStatus(item.id, "done")}
+                  />
+                ))}
+                {preparingItems.length === 0 && (
+                  <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-border rounded-3xl opacity-40">
+                    <p className="text-sm font-medium">No active prep</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Column: Queued */}
+            <div className="flex flex-col gap-4 min-w-0 h-full">
+               <div className="flex items-center justify-between px-2">
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-[0.2em] flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-muted" />
+                  Order Queue
+                </h3>
+                <span className="text-[10px] font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
+                   {newItems.length} PENDING
+                </span>
+              </div>
+              <div className="flex-1 overflow-y-auto pr-2 space-y-3 scrollbar-dineflow pb-10">
+                {newItems.map((item) => (
+                  <OrderCard
+                    key={item.id}
+                    item={item}
+                    onAction={() => handleUpdateItemStatus(item.id, "preparing")}
+                  />
+                ))}
+                {newItems.length === 0 && (
+                  <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-border rounded-3xl opacity-40">
+                    <p className="text-sm font-medium">Queue is empty</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* ─── PAGE 2: KITCHEN INTELLIGENCE (PREP + AI + FLASH) ─── */
+          <div className="flex gap-6 h-[calc(100%-80px)] overflow-hidden">
+            {/* Main Column: Prep Sheet */}
+            <div className="flex-1 flex flex-col gap-4 min-w-0 h-full">
+              <div className="flex items-center justify-between px-2">
+                <h3 className="text-xs font-bold text-mint uppercase tracking-[0.2em]">Prep Progress Tracking</h3>
+                <span className="text-[10px] text-muted-foreground italic">Based on historical lunch demand</span>
+              </div>
+              <div className="flex-1 overflow-y-auto pr-2 space-y-3 scrollbar-dineflow pb-10">
                 {localPrepItems.map((item) => {
                   const pct = Math.round((item.prepped / item.target) * 100);
                   const barColor = pct >= 90 ? "bg-mint" : pct >= 50 ? "bg-amber" : "bg-coral";
                   const pctColor = pct >= 90 ? "text-mint" : pct >= 50 ? "text-amber" : "text-coral";
                   return (
-                    <div key={item.id} className="card-dineflow p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-2xl">{item.icon}</span>
+                    <div key={item.id} className="card-dineflow p-4 group hover:ring-1 hover:ring-accent/20 transition-all duration-300">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-2xl bg-muted/50 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                            {item.icon}
+                          </div>
                           <div>
-                            <p className="font-semibold text-foreground">{item.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Usual: {item.usual} · Target: <strong className="text-foreground">{item.target}</strong>
+                            <p className="font-bold text-foreground">{item.name}</p>
+                            <p className="text-[11px] text-muted-foreground font-medium">
+                              Target Supply: <span className="text-foreground">{item.target} units</span>
                             </p>
                           </div>
                         </div>
-                        {item.aiTag && (
-                          <span className={`text-[10px] font-semibold px-2 py-1 rounded-full shrink-0 ${tagColors[item.aiTag.type] || "bg-muted text-muted-foreground"}`}>
-                            {item.aiTag.label}
-                          </span>
-                        )}
+                        <div className={`text-right ${pctColor}`}>
+                          <p className="text-lg font-black leading-none">{pct}%</p>
+                          <p className="text-[10px] font-bold uppercase tracking-tighter">Ready</p>
+                        </div>
                       </div>
 
                       {/* Progress bar */}
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-700 ${barColor}`}
-                            style={{ width: `${Math.min(pct, 100)}%` }}
-                          />
-                        </div>
-                        <span className={`text-xs font-bold w-10 text-right ${pctColor}`}>{pct}%</span>
+                      <div className="mt-4 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-1000 ease-out ${barColor}`}
+                          style={{ width: `${Math.min(pct, 100)}%` }}
+                        />
                       </div>
 
-                      {/* Stepper */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Prepped</span>
-                        <div className="flex items-center gap-2">
+                      <div className="mt-4 flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                           {item.aiTag && (
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${tagColors[item.aiTag.type]}`}>
+                              {item.aiTag.label}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 bg-muted/60 p-1 rounded-xl border border-border/50">
                           <button
                             onClick={() => handleUpdatePrep(item.id, -1)}
-                            className="w-7 h-7 flex items-center justify-center bg-muted text-foreground border border-border rounded-lg hover:bg-muted/80 transition"
+                            className="w-8 h-8 flex items-center justify-center bg-card text-foreground shadow-sm rounded-lg hover:bg-accent hover:text-white transition-all active:scale-90"
                           >
-                            <Minus size={13} />
+                            <Minus size={14} />
                           </button>
-                          <span className="font-bold text-foreground text-base min-w-[2.5ch] text-center">{item.prepped}</span>
+                          <span className="font-mono font-bold text-sm min-w-[3ch] text-center">{item.prepped}</span>
                           <button
                             onClick={() => handleUpdatePrep(item.id, 1)}
-                            className="w-7 h-7 flex items-center justify-center bg-muted text-foreground border border-border rounded-lg hover:bg-muted/80 transition"
+                            className="w-8 h-8 flex items-center justify-center bg-card text-foreground shadow-sm rounded-lg hover:bg-accent hover:text-white transition-all active:scale-90"
                           >
-                            <Plus size={13} />
+                            <Plus size={14} />
                           </button>
                         </div>
                       </div>
-
-                      {/* Expiry alert */}
-                      {item.expiryAlert && (
-                        <div className="flex items-center justify-between bg-coral/8 border border-coral/15 rounded-lg px-3 py-2">
-                          <span className="text-xs text-coral font-medium">⚠️ {item.stock} expiring soon</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">Flash Sale?</span>
-                            <button
-                              onClick={() => toggleFlashSale(item.id)}
-                              className={`w-10 h-5 rounded-full relative transition-colors ${
-                                flashSaleActive[item.id] ? "bg-mint" : "bg-border"
-                              }`}
-                            >
-                              <span
-                                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                                  flashSaleActive[item.id] ? "translate-x-5" : "translate-x-0.5"
-                                }`}
-                              />
-                            </button>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   );
                 })}
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN — Flash Sales */}
-        <div className="w-72 shrink-0 flex flex-col gap-4">
-          <div className="card-dineflow overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-accent/5">
-              <div className="flex items-center gap-2">
-                <Zap size={14} className="text-accent" />
-                <h3 className="font-semibold text-sm text-foreground">Near-Expiry Flash Sales</h3>
-              </div>
-              <span className="text-xs text-muted-foreground font-medium">{flashSales.length} items</span>
             </div>
-            <div className="divide-y divide-border">
-              {flashSales.map((fs) => (
-                <div key={fs.id} className="flex items-center justify-between px-4 py-3">
-                  <div>
-                    <p className="font-semibold text-sm text-foreground">{fs.name}</p>
-                    <p className="text-xs text-muted-foreground">{fs.stock}</p>
-                    <p className="text-sm mt-0.5">
-                      <span className="line-through text-muted-foreground text-xs">₹{fs.originalPrice}</span>{" "}
-                      <span className="text-mint font-bold">₹{fs.salePrice}</span>
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => toggleFlashSale(fs.id)}
-                    className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-all border ${
-                      flashSaleActive[fs.id]
-                        ? "bg-mint/10 text-mint border-mint/25"
-                        : "bg-transparent text-muted-foreground border-border hover:bg-accent/8 hover:text-accent hover:border-accent/20"
-                    }`}
-                  >
-                    {flashSaleActive[fs.id] ? "✓ Active" : "Activate"}
-                  </button>
+
+            {/* Sidebar: Insights & Flash Sales */}
+            <div className="w-80 shrink-0 flex flex-col gap-4 h-full overflow-y-auto pb-10 pr-1 scrollbar-hide">
+              
+              {/* AI Showcase Card */}
+              <div className="relative overflow-hidden rounded-3xl p-5 bg-gradient-to-br from-accent/15 via-accent/5 to-card border border-accent/20 shadow-sm">
+                <div className="absolute top-0 right-0 p-3 opacity-10">
+                  <Zap size={60} />
                 </div>
-              ))}
+                <div className="relative z-10 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-2 w-2 rounded-full bg-accent animate-pulse" />
+                    <p className="text-[10px] font-black text-accent uppercase tracking-widest">AI Strategic Forecast</p>
+                  </div>
+                  <h4 className="font-display font-bold text-lg leading-tight text-foreground">
+                    "Weekend peak incoming — boost Gulab Jamun prep by 40%."
+                  </h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Analyzing historical table turnovers and current humidity levels for optimal storage.
+                  </p>
+                  <div className="pt-2">
+                    <button className="text-[10px] font-bold text-accent hover:underline flex items-center gap-1">
+                      View full demand report →
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Flash Sales Section */}
+              <div className="card-dineflow overflow-hidden flex flex-col border border-coral/20">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-coral/5">
+                  <div className="flex items-center gap-2">
+                    <Zap size={14} className="text-coral" />
+                    <h3 className="font-bold text-xs text-foreground uppercase tracking-wider">Near-Expiry Actions</h3>
+                  </div>
+                  <span className="text-[10px] font-black text-coral bg-coral/10 px-2 py-0.5 rounded-full">
+                    {flashSales.length} ITEMS
+                  </span>
+                </div>
+                <div className="divide-y divide-border">
+                  {flashSales.length === 0 ? (
+                    <div className="p-8 text-center opacity-40">
+                      <p className="text-xs">No items currently at risk</p>
+                    </div>
+                  ) : (
+                    flashSales.map((fs) => (
+                      <div key={fs.id} className="group p-5 hover:bg-muted/30 transition-colors">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <p className="font-bold text-sm text-foreground">{fs.name}</p>
+                            <p className="text-[10px] text-coral font-medium flex items-center gap-1">
+                              <Clock size={10} /> Expiring in ~4 hours
+                            </p>
+                            <p className="text-sm pt-2 flex items-center gap-2">
+                              <span className="line-through text-muted-foreground text-xs opacity-50 font-mono">₹{fs.originalPrice}</span>
+                              <span className="text-mint font-black font-mono">₹{fs.salePrice}</span>
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => toggleFlashSale(fs.id)}
+                            className={`shrink-0 text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-tighter transition-all border ${
+                              flashSaleActive[fs.id]
+                                ? "bg-mint text-white border-mint shadow-lg shadow-mint/20"
+                                : "bg-transparent text-muted-foreground border-border hover:border-coral hover:text-coral"
+                            }`}
+                          >
+                            {flashSaleActive[fs.id] ? "Live Now" : "Flash Sale"}
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Eco Impact Summary */}
+              <div className="p-5 rounded-3xl bg-mint/5 border border-mint/20 text-center space-y-2">
+                <p className="text-[10px] font-black text-mint uppercase tracking-widest">Sustainability Rank</p>
+                <p className="font-display text-2xl font-bold text-foreground">Top 5%</p>
+                <p className="text-[11px] text-muted-foreground">Kitchen waste reduction is exceeding targets this week.</p>
+              </div>
+
             </div>
           </div>
-
-          {/* AI Tip card */}
-          <div className="card-dineflow p-4 bg-amber/5 border border-amber/15">
-            <p className="text-xs font-semibold text-amber mb-1">💡 AI Tip</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Weekend peak hours incoming — consider prepping Gulab Jamun 40% above usual target.
-            </p>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

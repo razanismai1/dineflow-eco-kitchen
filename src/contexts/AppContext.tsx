@@ -30,13 +30,6 @@ export interface CartItem {
   quantity: number;
 }
 
-export interface WasteLogEntry {
-  timestamp: string;
-  item: string;
-  qty: string;
-  unit: string;
-  reason: string;
-}
 
 interface AppContextType {
   cart: CartItem[];
@@ -51,8 +44,6 @@ interface AppContextType {
   resetAllTables: () => void;
   flashSaleActive: Record<number, boolean>;
   toggleFlashSale: (id: number) => void;
-  wasteLogs: WasteLogEntry[];
-  addWasteLog: (entry: WasteLogEntry) => void;
   userRole: UserRole;
   setUserRole: React.Dispatch<React.SetStateAction<UserRole>>;
   isAuthLoading: boolean;
@@ -60,18 +51,12 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const initialWasteLogs: WasteLogEntry[] = [
-  { timestamp: "10:32", item: "Chicken curry", qty: "800", unit: "g", reason: "Over-prepped" },
-  { timestamp: "09:15", item: "Idli", qty: "12", unit: "pcs", reason: "Expiry" },
-  { timestamp: "08:50", item: "Bread", qty: "6", unit: "pcs", reason: "Damaged delivery" },
-];
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [ecoPoints, setEcoPoints] = useState(142);
   const [tablesState, setTablesState] = useState<TableData[]>([]);
   const [flashSaleActive, setFlashSaleActive] = useState<Record<number, boolean>>({ 2: true });
-  const [wasteLogs, setWasteLogs] = useState<WasteLogEntry[]>(initialWasteLogs);
   const [userRole, setUserRole] = useState<UserRole>(() => {
     const storedRole = localStorage.getItem('user_role')?.toLowerCase();
     if (storedRole === 'admin' || storedRole === 'chef' || storedRole === 'waiter' || storedRole === 'customer') {
@@ -133,12 +118,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toggleFlashSale = (id: number) =>
     setFlashSaleActive((prev) => ({ ...prev, [id]: !prev[id] }));
 
-  const addWasteLog = (entry: WasteLogEntry) =>
-    setWasteLogs((prev) => [entry, ...prev].slice(0, 5));
 
   return (
     <AppContext.Provider
-      value={{ cart, addToCart, removeFromCart, updateCartQty, clearCart, ecoPoints, addEcoPoints, tablesState, setTablesState, resetAllTables, flashSaleActive, toggleFlashSale, wasteLogs, addWasteLog, userRole, setUserRole, isAuthLoading }}
+      value={{ cart, addToCart, removeFromCart, updateCartQty, clearCart, ecoPoints, addEcoPoints, tablesState, setTablesState, resetAllTables, flashSaleActive, toggleFlashSale, userRole, setUserRole, isAuthLoading }}
     >
       {children}
     </AppContext.Provider>

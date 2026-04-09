@@ -118,10 +118,12 @@ const toSupplierUi = (supplier: any): SupplierUi => {
   return {
     id: Number(supplier?.id ?? Date.now()),
     supplier: name,
-    itemCategories: Array.isArray(supplier?.itemCategories) && supplier.itemCategories.length > 0
+    itemCategories: Array.isArray(supplier?.item_categories) && supplier.item_categories.length > 0 
+      ? supplier.item_categories 
+      : Array.isArray(supplier?.itemCategories) && supplier.itemCategories.length > 0
       ? supplier.itemCategories
       : ["General"],
-    contactNumber: supplier?.contactNumber || "N/A",
+    contactNumber: supplier?.contact_number || supplier?.contactNumber || "N/A",
     qty: supplier?.qty || "-",
     expected: supplier?.expected || "-",
     status,
@@ -130,14 +132,14 @@ const toSupplierUi = (supplier: any): SupplierUi => {
     operationalTime: supplier?.operationalTime || "N/A",
     returnPolicy: supplier?.returnPolicy || "N/A",
     paymentTerms: supplier?.paymentTerms || "N/A",
-    isCustom: !!supplier?.isCustom,
-    isSelected: !!supplier?.isSelected,
+    isCustom: !!supplier?.is_custom || !!supplier?.isCustom,
+    isSelected: !!supplier?.is_selected || !!supplier?.isSelected,
   };
 };
 
 const toInventoryUi = (item: any): InventoryUi => {
   const quantity = Number(item?.quantity ?? 0);
-  const dailyRequirement = Number(item?.dailyRequirement ?? 10);
+  const dailyRequirement = Number(item?.daily_requirement ?? item?.dailyRequirement ?? 10);
   let status: InventoryUi["status"] = "In Stock";
   if (quantity <= 0) status = "Out of Stock";
   else if (quantity <= dailyRequirement) status = "Low Stock";
@@ -158,7 +160,7 @@ export default function AdminDashboard() {
   const { data: analyticsData } = useDashboardAnalytics();
   const { data: chartDataApi } = useSalesVsWasteChart();
   const { data: suppliersApi } = useSuppliers();
-  const { data: inventoryApi } = useInventoryItems();
+  const { data: inventoryItemsApi } = useInventoryItems();
   const { data: menuCategoriesApi = [] } = useCategories();
   const { data: menuItemsApi = [] } = useMenuItems();
   const { data: staffListApi } = useStaffList();
@@ -170,7 +172,7 @@ export default function AdminDashboard() {
   const statsData = analyticsData || { revenueRecovered: 0, co2Saved: 0, inventoryEfficiency: 0, treesEquivalent: 0 };
   const chartData = chartDataApi || [];
   const initialSuppliers: SupplierUi[] = Array.isArray(suppliersApi) ? suppliersApi.map(toSupplierUi) : [];
-  const initialInventory: InventoryUi[] = Array.isArray(inventoryApi) ? inventoryApi.map(toInventoryUi) : [];
+  const initialInventory: InventoryUi[] = Array.isArray(inventoryItemsApi) ? inventoryItemsApi.map(toInventoryUi) : [];
 
   const revenue = useCountUp(statsData.revenueRecovered);
   const co2 = useCountUp(statsData.co2Saved);
@@ -229,6 +231,7 @@ export default function AdminDashboard() {
   const [menuItemDiscountPrice, setMenuItemDiscountPrice] = useState<number | string>("");
   const [menuItemEcoScore, setMenuItemEcoScore] = useState<number | string>(5);
   const [menuItemIsVegan, setMenuItemIsVegan] = useState(false);
+  const [menuItemImage, setMenuItemImage] = useState<File | null>(null);
 
   // Inventory State
   const [inventoryList, setInventoryList] = useState<InventoryUi[]>(initialInventory);
@@ -240,7 +243,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     setInventoryList(initialInventory);
-  }, [inventoryApi]);
+  }, [inventoryItemsApi]);
 
   // Inventory Setup Modal State
   const openStaffModal = (staff?: any) => {
@@ -343,8 +346,8 @@ export default function AdminDashboard() {
   const openPurchaseModal = (item: InventoryUi) => {
     setPurchaseItem(item);
     setPurchaseQty("");
-    // Find a supplier that supplies this category from fetched backend list
-    const matchingSupplier = fetchedSuppliers.find(s => (s.itemCategories || []).includes(item.category));
+    // Find a selected supplier that supplies this category from fetched backend list
+    const matchingSupplier = fetchedSuppliers.find(s => (s.itemCategories || []).includes(item.category) && s.isSelected);
     setSelectedSupplierId(matchingSupplier ? matchingSupplier.id : "");
     setIsPurchaseModalOpen(true);
   };
@@ -394,7 +397,7 @@ export default function AdminDashboard() {
     setIsInventoryModalOpen(true);
   };
 
-  const handleSaveInventoryItem = (e: React.FormEvent) => {
+  const handleSaveInventoryItem = async (e: React.FormEvent) => {
     e.preventDefault();
     const qty = Number(itemQty) || 0;
     const dailyReq = Number(itemDailyReq) || 0;
@@ -403,33 +406,32 @@ export default function AdminDashboard() {
     if (qty <= 0) status = "Out of Stock";
     else if (qty <= dailyReq) status = "Low Stock";
 
-    if (editingItemId) {
-      setInventoryList(prev => prev.map(item => 
-        item.id === editingItemId ? {
-          ...item,
+    try {
+      if (editingItemId) {
+        await inventoryApi.updateItem(editingItemId, {
           name: itemName,
           category: itemCategory,
           quantity: qty,
           unit: itemUnit,
-          dailyRequirement: dailyReq,
-          status
-        } : item
-      ));
-      toast.success("Inventory item updated");
-    } else {
-      const newItem = {
-        id: Math.max(...inventoryList.map(i => i.id), 0) + 1,
-        name: itemName,
-        category: itemCategory,
-        quantity: qty,
-        unit: itemUnit,
-        dailyRequirement: dailyReq,
-        status
-      };
-      setInventoryList([...inventoryList, newItem]);
-      toast.success("Inventory item added");
+          daily_requirement: dailyReq,
+        });
+        toast.success("Inventory item updated");
+      } else {
+        await inventoryApi.createItem({
+          name: itemName,
+          category: itemCategory,
+          quantity: qty,
+          unit: itemUnit,
+          daily_requirement: dailyReq,
+          expiry_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        });
+        toast.success("Inventory item added");
+      }
+      await queryClient.invalidateQueries({ queryKey: ["inventory", "items"] });
+      setIsInventoryModalOpen(false);
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to save inventory item");
     }
-    setIsInventoryModalOpen(false);
   };
 
   // Settings State
@@ -460,46 +462,58 @@ export default function AdminDashboard() {
     toast.success("Supplier status updated");
   };
 
-  const deleteSupplier = (id: number) => {
-    setSuppliersList(prev => prev.filter(s => s.id !== id));
-    toast.success("Supplier removed");
+  const deleteSupplier = async (id: number) => {
+    try {
+      await inventoryApi.deleteSupplier(id);
+      setSuppliersList(prev => prev.filter(s => s.id !== id));
+      await queryClient.invalidateQueries({ queryKey: ["inventory", "suppliers"] });
+      toast.success("Supplier removed");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to delete supplier");
+    }
   };
 
-  const toggleSupplierSelect = (id: number, e: React.MouseEvent) => {
+  const toggleSupplierSelect = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
+    const targetSupplier = suppliersList.find(s => s.id === id);
+    if (!targetSupplier) return;
+    const newIsSelected = !targetSupplier.isSelected;
+
     setSuppliersList(prev => prev.map(s => {
       if (s.id === id) {
-        if (!s.isSelected) toast.success(`${s.supplier} added to Selected Suppliers`);
-        return { ...s, isSelected: !s.isSelected };
+        if (newIsSelected) toast.success(`${s.supplier} added to Selected Suppliers`);
+        return { ...s, isSelected: newIsSelected };
       }
       return s;
     }));
+
+    try {
+      await inventoryApi.updateSupplier(id, { is_selected: newIsSelected });
+      await queryClient.invalidateQueries({ queryKey: ["inventory", "suppliers"] });
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to update supplier preference");
+    }
   };
 
-  const handleAddVendor = (e: React.FormEvent) => {
+  const handleAddVendor = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newSupplier = {
-      id: Math.max(...suppliersList.map(s => s.id), 0) + 1,
-      supplier: vendorName,
-      itemCategories: vendorCategories,
-      contactNumber: vendorPhone,
-      qty: "—",
-      expected: "—",
-      status: "pending" as const,
-      location: restaurantLocation === "All" ? "Custom Location" : `${restaurantLocation} (Custom)`,
-      operatingDays: "—",
-      operationalTime: "—",
-      returnPolicy: "—",
-      paymentTerms: "—",
-      isCustom: true
-    };
+    try {
+      await inventoryApi.createSupplier({
+        name: vendorName,
+        contact_number: vendorPhone,
+        item_categories: vendorCategories,
+        is_custom: true,
+      });
 
-    setSuppliersList([...suppliersList, newSupplier]);
-    setIsAddVendorModalOpen(false);
-    setVendorName("");
-    setVendorPhone("");
-    setVendorCategories([]);
-    toast.success("Vendor added successfully");
+      await queryClient.invalidateQueries({ queryKey: ["inventory", "suppliers"] });
+      setIsAddVendorModalOpen(false);
+      setVendorName("");
+      setVendorPhone("");
+      setVendorCategories([]);
+      toast.success("Vendor added successfully");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to add vendor");
+    }
   };
 
   const handleAddTable = async (e: React.FormEvent) => {
@@ -604,6 +618,7 @@ export default function AdminDashboard() {
       setMenuItemDiscountPrice("");
       setMenuItemEcoScore(5);
       setMenuItemIsVegan(false);
+      setMenuItemImage(null);
     }
     setIsMenuItemModalOpen(true);
   };
@@ -622,7 +637,7 @@ export default function AdminDashboard() {
         return;
       }
 
-      const payload = {
+      const basePayload = {
         name: menuItemName.trim(),
         description: menuItemDescription.trim(),
         category: categoryId,
@@ -632,11 +647,22 @@ export default function AdminDashboard() {
         is_vegan: menuItemIsVegan,
       };
 
+      let finalPayload: any = basePayload;
+      if (menuItemImage) {
+        finalPayload = new FormData();
+        Object.entries(basePayload).forEach(([key, value]) => {
+          if (value !== null && value !== undefined) {
+            finalPayload.append(key, value);
+          }
+        });
+        finalPayload.append("image", menuItemImage);
+      }
+
       if (editingMenuItemId) {
-        await menuApi.updateItem(editingMenuItemId, payload);
+        await menuApi.updateItem(editingMenuItemId, finalPayload);
         toast.success("Menu item updated");
       } else {
-        await menuApi.createItem(payload);
+        await menuApi.createItem(finalPayload);
         toast.success("Menu item created");
       }
 
@@ -750,8 +776,19 @@ export default function AdminDashboard() {
                 return (
                   <tr key={item.id} className="border-b border-border hover:bg-muted/10 transition-colors">
                     <td className="px-6 py-4">
-                      <p className="font-medium">{item.name}</p>
-                      <p className="text-xs text-muted-foreground truncate max-w-[360px]">{item.description || "No description"}</p>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-md shrink-0 overflow-hidden bg-muted border border-border/50 flex items-center justify-center">
+                          {item.image || item.image_url ? (
+                            <img src={item.image || item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-sm">{item.is_vegan ? "🥬" : "🍗"}</span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-medium">{item.name}</p>
+                          <p className="text-xs text-muted-foreground truncate max-w-[320px]">{item.description || "No description"}</p>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">{item.category_name || `#${item.category}`}</td>
                     <td className="px-6 py-4">
@@ -1529,6 +1566,16 @@ export default function AdminDashboard() {
                 <label htmlFor="menu-item-vegan" className="text-sm">Vegan</label>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium mb-1">Food Image Upload (optional)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setMenuItemImage(e.target.files?.[0] || null)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-accent/10 file:text-accent hover:file:bg-accent/20"
+                />
+              </div>
+
               <div className="pt-4 flex gap-3">
                 <button
                   type="button"
@@ -1761,15 +1808,14 @@ export default function AdminDashboard() {
                 <select required value={selectedSupplierId} onChange={e => setSelectedSupplierId(e.target.value ? Number(e.target.value) : "")}
                   className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-accent transition-all">
                   <option value="" disabled>Select a supplier...</option>
-                  {fetchedSuppliers.filter(s => (s.itemCategories || []).includes(purchaseItem.category)).map(c => (
+                  {fetchedSuppliers.filter(s => (s.itemCategories || []).includes(purchaseItem.category) && s.isSelected).map(c => (
                     <option key={c.id} value={c.id}>{c.supplier}</option>
                   ))}
-                  {fetchedSuppliers.length > 0 && <option disabled>──────</option>}
-                  {fetchedSuppliers.filter(s => !(s.itemCategories || []).includes(purchaseItem.category)).map(c => (
-                    <option key={c.id} value={c.id}>{c.supplier} (Other Categories)</option>
-                  ))}
-                  {fetchedSuppliers.length === 0 && (
-                    <option disabled>No suppliers found. Please add vendors in the Suppliers section.</option>
+                  {fetchedSuppliers.filter(s => s.isSelected).length === 0 && (
+                    <option disabled>No selected suppliers active. Please toggle vendors in Suppliers tab.</option>
+                  )}
+                  {fetchedSuppliers.filter(s => s.isSelected).length > 0 && fetchedSuppliers.filter(s => (s.itemCategories || []).includes(purchaseItem.category) && s.isSelected).length === 0 && (
+                    <option disabled>No selected suppliers cover the "{purchaseItem.category}" category.</option>
                   )}
                 </select>
               </div>
