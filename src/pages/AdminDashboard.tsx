@@ -857,9 +857,9 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Stats Grid with left border stripes */}
+      {/* Stats Grid */}
       <div className="grid grid-cols-3 gap-6">
-        <div className="card-dineflow-stripe stat-stripe-green p-6 animate-count-up">
+        <div className="card-dineflow p-6 animate-count-up">
           <div className="flex items-start justify-between mb-3">
             <div>
               <p className="text-sm text-muted-foreground">Revenue Recovered</p>
@@ -872,7 +872,7 @@ export default function AdminDashboard() {
           <span className="badge-pill bg-mint/15 text-mint">+18% vs last month</span>
         </div>
 
-        <div className="card-dineflow-stripe stat-stripe-mint p-6 animate-count-up" style={{ animationDelay: "0.1s" }}>
+        <div className="card-dineflow p-6 animate-count-up" style={{ animationDelay: "0.1s" }}>
           <div className="flex items-start justify-between mb-3">
             <div>
               <p className="text-sm text-muted-foreground">CO₂ Saved</p>
@@ -885,7 +885,7 @@ export default function AdminDashboard() {
           <span className="badge-pill bg-mint/15 text-mint">= {statsData.treesEquivalent} trees planted</span>
         </div>
 
-        <div className="card-dineflow-stripe stat-stripe-steel p-6 animate-count-up" style={{ animationDelay: "0.2s" }}>
+        <div className="card-dineflow p-6 animate-count-up" style={{ animationDelay: "0.2s" }}>
           <div className="flex items-start justify-between mb-3">
             <div>
               <p className="text-sm text-muted-foreground">Inventory Efficiency</p>
@@ -1135,26 +1135,43 @@ export default function AdminDashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="card-dineflow p-6 flex flex-col gap-2">
-            <div className="flex items-center gap-3 text-muted-foreground mb-2">
-              <Package size={20} className="text-accent" />
-              <h3 className="font-medium text-foreground">Total Items</h3>
+          <div className="card-dineflow p-6 animate-count-up">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Items</p>
+                <p className="font-display text-3xl mt-1">{totalItems}</p>
+              </div>
+              <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                <Package size={20} className="text-accent" />
+              </div>
             </div>
-            <p className="text-3xl font-display">{totalItems}</p>
+            <span className="badge-pill bg-accent/15 text-accent">Active tracking</span>
           </div>
-          <div className="card-dineflow p-6 flex flex-col gap-2">
-            <div className="flex items-center gap-3 text-muted-foreground mb-2">
-              <AlertTriangle size={20} className="text-amber" />
-              <h3 className="font-medium text-foreground">Low Stock</h3>
+
+          <div className="card-dineflow p-6 animate-count-up" style={{ animationDelay: "0.1s" }}>
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-sm text-muted-foreground">Low Stock</p>
+                <p className="font-display text-3xl mt-1 text-amber">{lowStockItems}</p>
+              </div>
+              <div className="w-10 h-10 rounded-lg bg-amber/10 flex items-center justify-center">
+                <AlertTriangle size={20} className="text-amber" />
+              </div>
             </div>
-            <p className="text-3xl font-display text-amber">{lowStockItems}</p>
+            <span className="badge-pill bg-amber/15 text-amber">Requires attention</span>
           </div>
-          <div className="card-dineflow p-6 flex flex-col gap-2">
-            <div className="flex items-center gap-3 text-muted-foreground mb-2">
-              <AlertCircle size={20} className="text-coral" />
-              <h3 className="font-medium text-foreground">Out of Stock</h3>
+
+          <div className="card-dineflow p-6 animate-count-up" style={{ animationDelay: "0.2s" }}>
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-sm text-muted-foreground">Out of Stock</p>
+                <p className="font-display text-3xl mt-1 text-coral">{outOfStockItems}</p>
+              </div>
+              <div className="w-10 h-10 rounded-lg bg-coral/10 flex items-center justify-center">
+                <AlertCircle size={20} className="text-coral" />
+              </div>
             </div>
-            <p className="text-3xl font-display text-coral">{outOfStockItems}</p>
+            <span className="badge-pill bg-coral/15 text-coral">Action needed</span>
           </div>
         </div>
 
