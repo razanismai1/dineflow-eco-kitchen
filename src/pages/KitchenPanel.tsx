@@ -228,42 +228,61 @@ export default function KitchenPanel() {
       </header>
 
       {/* ── Summary bar ── */}
-      <div className="grid grid-cols-4 gap-3 px-6 py-3 bg-card border-b border-border/50">
-        <div className="flex items-center gap-2 bg-coral/8 border border-coral/15 rounded-xl px-3 py-2">
-          <span className="text-lg">🔥</span>
-          <div>
-            <p className="text-[11px] text-coral font-medium">Preparing</p>
-            <p className="font-bold text-coral text-lg leading-none">{preparingItems.length}</p>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 px-6 py-6">
+        <div className="card-dineflow p-6 animate-count-up">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <p className="text-sm text-muted-foreground">Preparing</p>
+              <p className="font-display text-3xl mt-1 text-coral">{preparingItems.length}</p>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-coral/10 flex items-center justify-center">
+              <ChefHat size={20} className="text-coral" />
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 bg-muted/60 border border-border rounded-xl px-3 py-2">
-          <span className="text-lg">📋</span>
-          <div>
-            <p className="text-[11px] text-muted-foreground font-medium">Queued</p>
-            <p className="font-bold text-foreground text-lg leading-none">{newItems.length}</p>
+
+        <div className="card-dineflow p-6 animate-count-up" style={{ animationDelay: "0.1s" }}>
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <p className="text-sm text-muted-foreground">Queued</p>
+              <p className="font-display text-3xl mt-1">{newItems.length}</p>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+              <ClipboardList size={20} className="text-foreground" />
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 bg-mint/8 border border-mint/15 rounded-xl px-3 py-2">
-          <span className="text-lg">✅</span>
-          <div>
-            <p className="text-[11px] text-mint font-medium">Done Today</p>
-            <p className="font-bold text-mint text-lg leading-none">
-              {orderItems.filter((i) => {
-                if (i.status !== "done") return false;
-                const d = new Date(i.createdAt);
-                const today = new Date();
-                return d.getDate() === today.getDate() &&
-                       d.getMonth() === today.getMonth() &&
-                       d.getFullYear() === today.getFullYear();
-              }).length}
-            </p>
+
+        <div className="card-dineflow p-6 animate-count-up" style={{ animationDelay: "0.2s" }}>
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <p className="text-sm text-muted-foreground">Done Today</p>
+              <p className="font-display text-3xl mt-1 text-mint">
+                {orderItems.filter((i) => {
+                  if (i.status !== "done") return false;
+                  const d = new Date(i.createdAt);
+                  const today = new Date();
+                  return d.getDate() === today.getDate() &&
+                         d.getMonth() === today.getMonth() &&
+                         d.getFullYear() === today.getFullYear();
+                }).length}
+              </p>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-mint/10 flex items-center justify-center">
+              <CheckCircle2 size={20} className="text-mint" />
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 bg-accent/8 border border-accent/15 rounded-xl px-3 py-2">
-          <Zap size={15} className="text-accent" />
-          <div>
-            <p className="text-[11px] text-accent font-medium">Flash Sales</p>
-            <p className="font-bold text-accent text-lg leading-none">{flashSaleCount}</p>
+
+        <div className="card-dineflow p-6 animate-count-up" style={{ animationDelay: "0.3s" }}>
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <p className="text-sm text-muted-foreground">Flash Sales</p>
+              <p className="font-display text-3xl mt-1 text-accent">{flashSaleCount}</p>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+              <Zap size={20} className="text-accent" />
+            </div>
           </div>
         </div>
       </div>
@@ -272,36 +291,26 @@ export default function KitchenPanel() {
       <div className="px-6 py-4 h-[calc(100vh-190px)] min-h-0 overflow-hidden">
         
         {/* Page Switcher Navigation */}
-        <div className="flex gap-2 mb-6 p-1 bg-muted/50 rounded-2xl w-fit border border-border/50">
+        <div className="flex mb-6 p-1 bg-muted/60 rounded-xl w-fit">
           <button
             onClick={() => setActiveTab("orders")}
-            className={`flex items-center gap-2.5 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${
+            className={`px-6 py-2 text-sm font-medium transition-all duration-200 rounded-lg ${
               activeTab === "orders"
-                ? "bg-card shadow-lg text-foreground scale-[1.02] ring-1 ring-border"
-                : "text-muted-foreground hover:text-foreground hover:bg-card/50"
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <ClipboardList size={18} className={activeTab === "orders" ? "text-coral" : ""} />
             Live Orders
-            {activeItems.length > 0 && (
-              <span className="ml-1 bg-coral text-white text-[10px] px-1.5 py-0.5 rounded-full font-black animate-pulse">
-                {activeItems.length}
-              </span>
-            )}
           </button>
           <button
             onClick={() => setActiveTab("intelligence")}
-            className={`flex items-center gap-2.5 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 ${
+            className={`px-6 py-2 text-sm font-medium transition-all duration-200 rounded-lg ${
               activeTab === "intelligence"
-                ? "bg-card shadow-lg text-foreground scale-[1.02] ring-1 ring-border"
-                : "text-muted-foreground hover:text-foreground hover:bg-card/50"
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Zap size={18} className={activeTab === "intelligence" ? "text-accent" : ""} />
             Kitchen Intelligence
-            <span className="ml-1 text-[10px] text-mint font-bold bg-mint/15 px-1.5 py-0.5 rounded-full border border-mint/20">
-              AI READY
-            </span>
           </button>
         </div>
 
@@ -435,7 +444,7 @@ export default function KitchenPanel() {
             </div>
 
             {/* Sidebar: Insights & Flash Sales */}
-            <div className="w-80 shrink-0 flex flex-col gap-4 h-full overflow-y-auto pb-10 pr-1 scrollbar-hide">
+            <div className="w-80 shrink-0 h-full overflow-y-auto pb-10 pr-1 scrollbar-hide space-y-4">
               
               {/* AI Showcase Card */}
               <div className="relative overflow-hidden rounded-3xl p-5 bg-gradient-to-br from-accent/15 via-accent/5 to-card border border-accent/20 shadow-sm">
