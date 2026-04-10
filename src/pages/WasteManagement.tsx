@@ -21,11 +21,11 @@ export default function WasteManagement() {
   const { mutate: createLog } = useCreateWasteLog();
 
   const itemOptions = [
-    ...(Array.isArray(inventoryItems) ? inventoryItems.map((i: any) => ({ 
-      id: i.id, label: `${i.name} (Inv)`, type: 'inv' 
+    ...(Array.isArray(inventoryItems) ? inventoryItems.map((i: any) => ({
+      id: i.id, label: `${i.name} (Inv)`, type: 'inv'
     })) : []),
-    ...(Array.isArray(menuItems) ? menuItems.map((m: any) => ({ 
-      id: m.id, label: `${m.name} (Menu)`, type: 'menu' 
+    ...(Array.isArray(menuItems) ? menuItems.map((m: any) => ({
+      id: m.id, label: `${m.name} (Menu)`, type: 'menu'
     })) : [])
   ];
 
@@ -96,7 +96,7 @@ export default function WasteManagement() {
   });
 
   const totalEntries = wasteLogs.length;
-  const reasonCounts = wasteLogs.reduce<Record<string, number>>((acc: any, log: any) => {
+  const reasonCounts = wasteLogs.reduce((acc: Record<string, number>, log: any) => {
     acc[log.reason] = (acc[log.reason] || 0) + 1;
     return acc;
   }, {});
