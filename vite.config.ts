@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => ({
     allowedHosts: true,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8000",
+        target: "https://135.235.193.182/api/v1/",
         changeOrigin: true,
         secure: false,
       },
