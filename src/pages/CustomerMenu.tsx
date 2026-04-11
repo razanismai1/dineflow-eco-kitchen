@@ -46,7 +46,7 @@ function EcoScore({ score }: { score: number }) {
 }
 
 export default function CustomerMenu() {
-  const { cart, addToCart, removeFromCart, updateCartQty, clearCart, ecoPoints, addEcoPoints, setTablesState } = useApp();
+  const { cart, addToCart, removeFromCart, updateCartQty, clearCart, ecoPoints, addEcoPoints, syncEcoPointsToBackend, userRole, setTablesState } = useApp();
   const [searchParams] = useSearchParams();
   const tableId = searchParams.get("table_id") ?? searchParams.get("table");
   const tableLabel = searchParams.get("table") ?? (tableId ? `T-${tableId}` : null);
@@ -129,6 +129,9 @@ export default function CustomerMenu() {
           setCartOpen(false);
           clearCart();
           addEcoPoints(85);
+          if (userRole === "customer") {
+            syncEcoPointsToBackend(ecoPoints + 85);
+          }
           if (tableLabel) {
             setTablesState((prev) =>
               prev.map((t) =>
@@ -224,10 +227,12 @@ export default function CustomerMenu() {
                 {tableLabel}
               </div>
             )}
-            <div className="flex items-center gap-1.5 text-accent">
-              <Leaf size={16} />
-              <span className="font-mono text-sm font-medium">{ecoPoints} pts</span>
-            </div>
+            {userRole === "customer" && (
+              <div className="flex items-center gap-1.5 text-accent">
+                <Leaf size={16} />
+                <span className="font-mono text-sm font-medium">{ecoPoints} pts</span>
+              </div>
+            )}
           </div>
         </header>
 

@@ -39,6 +39,7 @@ interface AppContextType {
   clearCart: () => void;
   ecoPoints: number;
   addEcoPoints: (pts: number) => void;
+  syncEcoPointsToBackend: (newTotal: number) => void;
   tablesState: TableData[];
   setTablesState: React.Dispatch<React.SetStateAction<TableData[]>>;
   resetAllTables: () => void;
@@ -54,7 +55,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [ecoPoints, setEcoPoints] = useState(142);
+  const [ecoPoints, setEcoPoints] = useState(0); // Start at 0 instead of 142
   const [tablesState, setTablesState] = useState<TableData[]>([]);
   const [flashSaleActive, setFlashSaleActive] = useState<Record<number, boolean>>({ 2: true });
   const [userRole, setUserRole] = useState<UserRole>(() => {
@@ -76,6 +77,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const normalizedRole = userData.role.toLowerCase() as UserRole;
       setUserRole(normalizedRole);
       localStorage.setItem('user_role', normalizedRole);
+      
+      // Load user's actual eco points from backend
+      if (userData.eco_points !== undefined) {
+        setEcoPoints(userData.eco_points);
+      }
     } else if (isError) {
       clearSession();
       setUserRole(null);
@@ -110,7 +116,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const clearCart = () => setCart([]);
-  const addEcoPoints = (pts: number) => setEcoPoints((p) => p + pts);
+  const addEcoPoints = (pts: number) => {
+    setEcoPoints((p) => {
+      const newPts = p + pts;
+      // Note: syncEcoPointsToBackend must be called outside to access new state
+      // or we can call it here if we pass newPts directly
+      return newPts;
+    });
+  };
+
+  const syncEcoPointsToBackend = async (newTotal: number) => {
+    if (tokenExists) {
+      try {
+        const { usersApi } = await import('@/api/users');
+        await usersApi.syncEcoPoints(newTotal);
+      } catch (e) {
+        console.error("Failed to sync eco points to backend", e);
+      }
+    }
+  };
 
   const resetAllTables = () =>
     setTablesState((prev) => prev.map((t) => ({ ...t, status: "available" as const, timeSeated: undefined, course: undefined, guestName: undefined, eta: undefined, distanceMeters: undefined, reservationTime: undefined, preOrderItems: undefined })));
@@ -121,7 +145,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider
-      value={{ cart, addToCart, removeFromCart, updateCartQty, clearCart, ecoPoints, addEcoPoints, tablesState, setTablesState, resetAllTables, flashSaleActive, toggleFlashSale, userRole, setUserRole, isAuthLoading }}
+      value={{ cart, addToCart, removeFromCart, updateCartQty, clearCart, ecoPoints, addEcoPoints, syncEcoPointsToBackend, tablesState, setTablesState, resetAllTables, flashSaleActive, toggleFlashSale, userRole, setUserRole, isAuthLoading }}
     >
       {children}
     </AppContext.Provider>
