@@ -66,7 +66,7 @@ export default function TableQRCodes() {
       {/* QR Grid */}
       <div ref={printRef} className="p-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
         {tables.map((table) => {
-          const url = `${BASE_URL}/menu?table_id=${table.id}&table=${encodeURIComponent(table.label)}`;
+          const url = `${BASE_URL}/menu?table_id=${table.id}`;
           const statusClass = statusColors[table.status] ?? statusColors.available;
 
           return (
